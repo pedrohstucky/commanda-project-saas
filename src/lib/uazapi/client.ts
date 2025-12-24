@@ -224,7 +224,7 @@ export async function connectInstanceWithRetry(params: {
   console.log('🔗 [Uazapi] Iniciando conexão com retry...')
   
   // Primeira tentativa: chamar /connect
-  let connection = await connectInstance({
+  const connection = await connectInstance({
     instanceToken: params.instanceToken,
     phone: params.phone
   })

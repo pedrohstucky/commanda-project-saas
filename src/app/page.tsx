@@ -1,11 +1,11 @@
 "use client"
 
-import Link from "next/link";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/logo";
+import Link from "next/link"
+import { useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import { Logo } from "@/components/logo"
 import {
   MessageSquare,
   Smartphone,
@@ -16,52 +16,53 @@ import {
   UtensilsCrossed,
   Clock,
   Users,
-} from "lucide-react";
+} from "lucide-react"
 
 export default function LandingPage() {
-
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
 
+  // =====================================================
+  // CHECK AUTH (REDIRECT SE LOGADO)
+  // =====================================================
+  const checkAuth = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        router.replace("/dashboard")
+      }
+    } catch (error) {
+      console.error("Erro ao verificar auth:", error)
+    }
+  }, [router, supabase])
+
   useEffect(() => {
     checkAuth()
-  }, [])
-
-  async function checkAuth() {
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (user){
-      router.push('/dashboard')
-    }
-  }
+  }, [checkAuth])
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* HEADER */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Logo />
+
           <nav className="hidden items-center gap-6 md:flex">
-            <Link
-              href="#features"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
+            <Link href="#features" className="text-sm text-muted-foreground hover:text-foreground">
               Recursos
             </Link>
-            <Link
-              href="#how-it-works"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
+            <Link href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground">
               Como funciona
             </Link>
-            <Link
-              href="#pricing"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
+            <Link href="#pricing" className="text-sm text-muted-foreground hover:text-foreground">
               Preços
             </Link>
           </nav>
-          <div className="flex items-center gap-3 cursor-pointer">
+
+          <div className="flex items-center gap-3">
             <Button variant="ghost" asChild>
               <Link href="/login">Entrar</Link>
             </Button>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
@@ -13,58 +13,77 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
+
   const [isLoading, setIsLoading] = useState(true)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
-  useEffect(() => {
-    checkUser()
-  }, [])
-
-  async function checkUser() {
+  // =====================================================
+  // CHECK AUTH + PROFILE + TENANT
+  // =====================================================
+  const checkUser = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        router.push('/login')
+      // 1. Verificar sessão
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError || !session) {
+        router.replace("/login")
         return
       }
 
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', session.user.id)
+      // 2. Verificar profile
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", session.user.id)
         .single()
 
-      if (error || !profile) {
-        console.error('Profile não encontrado:', error)
+      if (profileError || !profile?.tenant_id) {
+        console.error("Profile inválido:", profileError)
         await supabase.auth.signOut()
-        router.push('/login')
+        router.replace("/login")
         return
       }
 
+      // 3. Tudo OK
       setIsLoading(false)
     } catch (error) {
-      console.error('Erro ao verificar usuário:', error)
-      router.push('/login')
+      console.error("Erro ao verificar usuário:", error)
+      router.replace("/login")
     }
-  }
+  }, [router, supabase])
 
+  // =====================================================
+  // EFFECT
+  // =====================================================
+  useEffect(() => {
+    checkUser()
+  }, [checkUser])
+
+  // =====================================================
+  // LOADING
+  // =====================================================
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-muted/30">
-      <DashboardSidebar 
-        isMobileOpen={isMobileSidebarOpen} 
-        setIsMobileOpen={setIsMobileSidebarOpen} 
+      <DashboardSidebar
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
       />
+
       <div className="lg:pl-64">
-        <DashboardHeader onMenuClick={() => setIsMobileSidebarOpen(true)} />
+        <DashboardHeader
+          onMenuClick={() => setIsMobileSidebarOpen(true)}
+        />
         <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>

@@ -1,22 +1,31 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { ShoppingBag, DollarSign, Clock, TrendingUp } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { useEffect, useState, useCallback } from "react";
+import { ShoppingBag, DollarSign, Clock, TrendingUp } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+
+/* -------------------------------------------------------------------------- */
+/*                                   TYPES                                    */
+/* -------------------------------------------------------------------------- */
 
 interface Metrics {
-  todayOrders: number
-  yesterdayOrders: number
-  todayRevenue: number
-  yesterdayRevenue: number
-  pendingOrders: number
-  avgTicket: number
-  lastWeekAvgTicket: number
+  todayOrders: number;
+  yesterdayOrders: number;
+  todayRevenue: number;
+  yesterdayRevenue: number;
+  pendingOrders: number;
+  avgTicket: number;
+  lastWeekAvgTicket: number;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                COMPONENT                                   */
+/* -------------------------------------------------------------------------- */
+
 export function DashboardMetrics() {
-  const supabase = createBrowserSupabaseClient()
+  const supabase = createBrowserSupabaseClient();
+
   const [metrics, setMetrics] = useState<Metrics>({
     todayOrders: 0,
     yesterdayOrders: 0,
@@ -24,206 +33,190 @@ export function DashboardMetrics() {
     yesterdayRevenue: 0,
     pendingOrders: 0,
     avgTicket: 0,
-    lastWeekAvgTicket: 0
-  })
-  const [isLoading, setIsLoading] = useState(true)
+    lastWeekAvgTicket: 0,
+  });
 
-  useEffect(() => {
-    loadMetrics()
-    const cleanup = setupRealtimeListeners()
-    return cleanup
-  }, [])
+  const [isLoading, setIsLoading] = useState(true);
 
-  function setupRealtimeListeners() {
-    console.log('📊 [Métricas] Configurando Realtime...')
+  /* -------------------------------------------------------------------------- */
+  /*                                  HELPERS                                   */
+  /* -------------------------------------------------------------------------- */
 
-    const channel = supabase
-      .channel('metrics-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('📊 [Realtime Métricas] Novo pedido:', payload.new)
-          loadMetrics()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('📊 [Realtime Métricas] Pedido atualizado:', payload.new)
-          loadMetrics()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'payments'
-        },
-        (payload) => {
-          console.log('📊 [Realtime Métricas] Pagamento registrado:', payload.new)
-          loadMetrics()
-        }
-      )
-      .subscribe((status, err) => {
-        console.log('📡 [Realtime Métricas] Status:', status)
-        
-        if (err) {
-          console.error('❌ [Realtime Métricas] Erro:', err)
-        }
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ [Realtime Métricas] Conectado!')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ [Realtime Métricas] Erro no canal')
-        } else if (status === 'TIMED_OUT') {
-          console.error('⏱️ [Realtime Métricas] Timeout')
-        } else if (status === 'CLOSED') {
-          console.log('🔒 [Realtime Métricas] Canal fechado')
-        }
-      })
+  const formatCurrency = useCallback((value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  }, []);
 
-    return () => {
-      console.log('🧹 [Métricas] Limpando canal Realtime')
-      supabase.removeChannel(channel)
-    }
-  }
+  const calculatePercentChange = useCallback(
+    (current: number, previous: number): string => {
+      if (previous === 0) {
+        return current > 0 ? "+100%" : "0%";
+      }
+      const change = ((current - previous) / previous) * 100;
+      return `${change >= 0 ? "+" : ""}${change.toFixed(0)}%`;
+    },
+    []
+  );
 
-  async function loadMetrics() {
+  /* -------------------------------------------------------------------------- */
+  /*                              LOAD METRICS                                  */
+  /* -------------------------------------------------------------------------- */
+
+  const loadMetrics = useCallback(async () => {
     try {
-      const now = new Date()
-      const today = new Date(now)
-      today.setHours(0, 0, 0, 0)
+      setIsLoading(true);
 
-      const yesterday = new Date(today)
-      yesterday.setDate(yesterday.getDate() - 1)
+      const now = new Date();
 
-      const lastWeek = new Date(today)
-      lastWeek.setDate(lastWeek.getDate() - 7)
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
 
-      // 1. PEDIDOS DE HOJE
-      const { count: todayOrdersCount } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', today.toISOString())
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
 
-      // 2. PEDIDOS DE ONTEM
-      const { count: yesterdayOrdersCount } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', yesterday.toISOString())
-        .lt('created_at', today.toISOString())
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
 
-      // 3. RECEITA DE HOJE
-      const { data: todayPaidOrders } = await supabase
-        .from('orders')
-        .select('total_amount')
-        .gte('created_at', today.toISOString())
-        .eq('status', 'paid')
+      /* ----------------------------- Orders Count ---------------------------- */
 
-      const todayRevenue = todayPaidOrders?.reduce(
-        (sum, order) => sum + Number(order.total_amount),
-        0
-      ) || 0
+      const [{ count: todayOrders }, { count: yesterdayOrders }] =
+        await Promise.all([
+          supabase
+            .from("orders")
+            .select("*", { count: "exact", head: true })
+            .gte("created_at", today.toISOString()),
 
-      // 4. RECEITA DE ONTEM
-      const { data: yesterdayPaidOrders } = await supabase
-        .from('orders')
-        .select('total_amount')
-        .gte('created_at', yesterday.toISOString())
-        .lt('created_at', today.toISOString())
-        .eq('status', 'paid')
+          supabase
+            .from("orders")
+            .select("*", { count: "exact", head: true })
+            .gte("created_at", yesterday.toISOString())
+            .lt("created_at", today.toISOString()),
+        ]);
 
-      const yesterdayRevenue = yesterdayPaidOrders?.reduce(
-        (sum, order) => sum + Number(order.total_amount),
-        0
-      ) || 0
+      /* ------------------------------- Revenue -------------------------------- */
 
-      // 5. PEDIDOS PENDENTES
-      const { count: pendingCount } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
+      const [{ data: todayPaid }, { data: yesterdayPaid }] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("total_amount")
+          .gte("created_at", today.toISOString())
+          .eq("status", "paid"),
 
-      // 6. TICKET MÉDIO DE HOJE
-      const avgTicket = todayOrdersCount && todayOrdersCount > 0
-        ? todayRevenue / todayOrdersCount
-        : 0
+        supabase
+          .from("orders")
+          .select("total_amount")
+          .gte("created_at", yesterday.toISOString())
+          .lt("created_at", today.toISOString())
+          .eq("status", "paid"),
+      ]);
 
-      // 7. TICKET MÉDIO DA SEMANA PASSADA
-      const { data: lastWeekOrders } = await supabase
-        .from('orders')
-        .select('total_amount')
-        .gte('created_at', lastWeek.toISOString())
-        .lt('created_at', today.toISOString())
-        .eq('status', 'paid')
+      const todayRevenue =
+        todayPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
-      const lastWeekRevenue = lastWeekOrders?.reduce(
-        (sum, order) => sum + Number(order.total_amount),
-        0
-      ) || 0
+      const yesterdayRevenue =
+        yesterdayPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
-      const lastWeekAvgTicket = lastWeekOrders && lastWeekOrders.length > 0
-        ? lastWeekRevenue / lastWeekOrders.length
-        : 0
+      /* ---------------------------- Pending Orders ---------------------------- */
+
+      const { count: pendingOrders } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
+
+      /* ---------------------------- Avg Ticket -------------------------------- */
+
+      const avgTicket =
+        todayOrders && todayOrders > 0 ? todayRevenue / todayOrders : 0;
+
+      /* ------------------------ Last Week Avg Ticket -------------------------- */
+
+      const { data: lastWeekPaid } = await supabase
+        .from("orders")
+        .select("total_amount")
+        .gte("created_at", lastWeek.toISOString())
+        .lt("created_at", today.toISOString())
+        .eq("status", "paid");
+
+      const lastWeekRevenue =
+        lastWeekPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+
+      const lastWeekAvgTicket =
+        lastWeekPaid && lastWeekPaid.length > 0
+          ? lastWeekRevenue / lastWeekPaid.length
+          : 0;
 
       setMetrics({
-        todayOrders: todayOrdersCount || 0,
-        yesterdayOrders: yesterdayOrdersCount || 0,
+        todayOrders: todayOrders ?? 0,
+        yesterdayOrders: yesterdayOrders ?? 0,
         todayRevenue,
         yesterdayRevenue,
-        pendingOrders: pendingCount || 0,
+        pendingOrders: pendingOrders ?? 0,
         avgTicket,
-        lastWeekAvgTicket
-      })
+        lastWeekAvgTicket,
+      });
     } catch (error) {
-      console.error('Erro ao carregar métricas:', error)
+      console.error("❌ Erro ao carregar métricas:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  }, [supabase]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
+  /* -------------------------------------------------------------------------- */
+  /*                               REALTIME (FIX)                               */
+  /* -------------------------------------------------------------------------- */
 
-  const calculatePercentChange = (current: number, previous: number): string => {
-    if (previous === 0) {
-      return current > 0 ? '+100%' : '0%'
-    }
-    const change = ((current - previous) / previous) * 100
-    return `${change >= 0 ? '+' : ''}${change.toFixed(0)}%`
-  }
+  useEffect(() => {
+    // 🔥 carrega imediatamente
+    loadMetrics();
+
+    const channel = supabase
+      .channel("dashboard-metrics")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+        },
+        () => {
+          loadMetrics();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, loadMetrics]);
+
+  /* -------------------------------------------------------------------------- */
+  /*                                   UI                                       */
+  /* -------------------------------------------------------------------------- */
 
   const metricsData = [
     {
       title: "Pedidos hoje",
       value: isLoading ? "..." : metrics.todayOrders.toString(),
-      change: isLoading 
-        ? "..." 
-        : `${calculatePercentChange(metrics.todayOrders, metrics.yesterdayOrders)} vs ontem`,
+      change: isLoading
+        ? "..."
+        : `${calculatePercentChange(
+            metrics.todayOrders,
+            metrics.yesterdayOrders
+          )} vs ontem`,
       icon: ShoppingBag,
       trend: metrics.todayOrders >= metrics.yesterdayOrders ? "up" : "down",
     },
     {
       title: "Faturamento do dia",
       value: isLoading ? "..." : formatCurrency(metrics.todayRevenue),
-      change: isLoading 
-        ? "..." 
-        : `${calculatePercentChange(metrics.todayRevenue, metrics.yesterdayRevenue)} vs ontem`,
+      change: isLoading
+        ? "..."
+        : `${calculatePercentChange(
+            metrics.todayRevenue,
+            metrics.yesterdayRevenue
+          )} vs ontem`,
       icon: DollarSign,
       trend: metrics.todayRevenue >= metrics.yesterdayRevenue ? "up" : "down",
     },
@@ -237,13 +230,16 @@ export function DashboardMetrics() {
     {
       title: "Ticket médio",
       value: isLoading ? "..." : formatCurrency(metrics.avgTicket),
-      change: isLoading 
-        ? "..." 
-        : `${calculatePercentChange(metrics.avgTicket, metrics.lastWeekAvgTicket)} vs semana`,
+      change: isLoading
+        ? "..."
+        : `${calculatePercentChange(
+            metrics.avgTicket,
+            metrics.lastWeekAvgTicket
+          )} vs semana`,
       icon: TrendingUp,
       trend: metrics.avgTicket >= metrics.lastWeekAvgTicket ? "up" : "down",
     },
-  ]
+  ];
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -272,5 +268,5 @@ export function DashboardMetrics() {
         </Card>
       ))}
     </div>
-  )
+  );
 }

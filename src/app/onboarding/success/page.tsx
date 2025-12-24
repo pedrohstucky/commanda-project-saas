@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, MessageCircle, ArrowRight, Loader2 } from "lucide-react"
 import { Logo } from "@/components/logo"
@@ -16,73 +16,72 @@ interface WhatsAppInstance {
 export default function WhatsAppSuccessPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
-  
+
   const [instance, setInstance] = useState<WhatsAppInstance | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    loadInstance()
-  }, [])
-
-  async function loadInstance() {
+  // =====================================================
+  // LOAD INSTANCE
+  // =====================================================
+  const loadInstance = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('phone_number, profile_name')
-        .eq('status', 'connected')
-        .order('created_at', { ascending: false })
+        .from("whatsapp_instances")
+        .select("phone_number, profile_name")
+        .eq("status", "connected")
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
 
       if (error) {
-        console.error('Erro ao carregar instância:', error)
-      } else if (data) {
+        console.error("Erro ao carregar instância:", error)
+        return
+      }
+
+      if (data) {
         setInstance(data)
       }
     } catch (error) {
-      console.error('Erro ao carregar instância:', error)
+      console.error("Erro ao carregar instância:", error)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadInstance()
+  }, [loadInstance])
 
   /**
    * Formata número de telefone
-   * Exemplo: 554599367177 → +55 45 99367-177
+   * Exemplo: 554599367177 → +55 (45) 99367-177
    */
   const formatPhone = (phone: string | null | undefined): string => {
-    // Se não tem telefone, retorna placeholder
-    if (!phone) {
-      return '+55 (--) ----------'
-    }
-    
-    // Remove caracteres não numéricos
-    const cleaned = phone.replace(/\D/g, '')
-    
-    // Formato brasileiro com DDD (13 dígitos: 55 + DDD + número)
+    if (!phone) return "+55 (--) ----------"
+
+    const cleaned = phone.replace(/\D/g, "")
+
     if (cleaned.length === 13) {
-      const countryCode = cleaned.slice(0, 2)   // 55
-      const areaCode = cleaned.slice(2, 4)      // 45
-      const firstPart = cleaned.slice(4, 9)     // 99367
-      const secondPart = cleaned.slice(9)       // 177
-      
+      const countryCode = cleaned.slice(0, 2)
+      const areaCode = cleaned.slice(2, 4)
+      const firstPart = cleaned.slice(4, 9)
+      const secondPart = cleaned.slice(9)
       return `+${countryCode} (${areaCode}) ${firstPart}-${secondPart}`
     }
-    
-    // Formato com 11 dígitos (DDD + número)
+
     if (cleaned.length === 11) {
       const areaCode = cleaned.slice(0, 2)
       const firstPart = cleaned.slice(2, 7)
       const secondPart = cleaned.slice(7)
-      
       return `+55 (${areaCode}) ${firstPart}-${secondPart}`
     }
-    
-    // Se não conseguir formatar, retorna o valor original
+
     return phone
   }
 
-  // Loading state
+  // =====================================================
+  // LOADING STATE
+  // =====================================================
   if (isLoading) {
     return (
       <div className="min-h-screen bg-muted/30">
@@ -113,22 +112,18 @@ export default function WhatsAppSuccessPage() {
       <main className="container mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
         <Card className="w-full max-w-md">
           <CardContent className="flex flex-col items-center p-8 text-center">
-            {/* Success Icon */}
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
               <CheckCircle2 className="h-12 w-12 text-success" />
             </div>
 
-            {/* Title */}
             <h1 className="mt-6 text-2xl font-bold tracking-tight">
               WhatsApp conectado com sucesso!
             </h1>
-            
-            {/* Description */}
+
             <p className="mt-2 text-muted-foreground">
               Tudo pronto! Seu restaurante já pode receber pedidos pelo WhatsApp.
             </p>
 
-            {/* Phone Number Card */}
             <div className="mt-6 flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-3 w-full">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success">
                 <MessageCircle className="h-5 w-5 text-success-foreground" />
@@ -141,7 +136,6 @@ export default function WhatsAppSuccessPage() {
               </div>
             </div>
 
-            {/* Profile Name (se disponível) */}
             {instance?.profile_name && (
               <div className="mt-3 rounded-lg bg-accent/50 px-3 py-2 text-sm">
                 <span className="text-muted-foreground">Perfil: </span>
@@ -151,16 +145,11 @@ export default function WhatsAppSuccessPage() {
               </div>
             )}
 
-            {/* CTA Button */}
-            <Button 
-              className="mt-8 w-full" 
-              onClick={() => router.push("/dashboard")}
-            >
+            <Button className="mt-8 w-full" onClick={() => router.push("/dashboard")}>
               Ir para o Dashboard
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
 
-            {/* Secondary Action */}
             <Button
               variant="ghost"
               className="mt-2 text-sm text-muted-foreground hover:text-foreground"

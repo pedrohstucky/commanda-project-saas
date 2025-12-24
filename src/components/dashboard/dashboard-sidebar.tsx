@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -32,6 +32,13 @@ interface DashboardSidebarProps {
   setIsMobileOpen: (open: boolean) => void
 }
 
+interface WhatsAppInstanceRow {
+  id: string
+  status: "connected" | "connecting" | "disconnected"
+  phone_number: string | null
+  created_at: string
+}
+
 export function DashboardSidebar({ 
   isMobileOpen, 
   setIsMobileOpen 
@@ -47,47 +54,58 @@ export function DashboardSidebar({
     phone: null
   })
 
-  useEffect(() => {
-    loadWhatsAppStatus()
-
-    const channel = supabase
-      .channel('whatsapp-sidebar')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'whatsapp_instances'
-        },
-        (payload) => {
-          setWhatsappStatus({
-            status: payload.new.status,
-            phone: payload.new.phone_number
-          })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  async function loadWhatsAppStatus() {
-    const { data } = await supabase
-      .from('whatsapp_instances')
-      .select('status, phone_number')
-      .order('created_at', { ascending: false })
+  const loadWhatsAppStatus = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("whatsapp_instances")
+      .select("status, phone_number")
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-
+  
+    if (error) {
+      console.error("Erro ao carregar WhatsApp status:", error)
+      return
+    }
+  
     if (data) {
       setWhatsappStatus({
         status: data.status,
-        phone: data.phone_number
+        phone: data.phone_number,
       })
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadWhatsAppStatus()
+  
+    const channel = supabase
+      .channel("whatsapp-sidebar")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "whatsapp_instances",
+        },
+        (payload) => {
+          const updated = payload.new as WhatsAppInstanceRow
+  
+          setWhatsappStatus({
+            status: updated.status,
+            phone: updated.phone_number,
+          })
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("✅ Realtime WhatsApp Sidebar conectado")
+        }
+      })
+  
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [loadWhatsAppStatus, supabase])
 
   async function handleSignOut() {
     await supabase.auth.signOut()

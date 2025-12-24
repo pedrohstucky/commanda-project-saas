@@ -84,7 +84,6 @@ export async function POST(
     // 2. DETECTAR FORMATO
     // =====================================================
     let instanceToken: string | null = null
-    let instanceName: string | null = null
     let status: string | null = null
     let qrCode: string | null = null
     let phoneNumber: string | null = null
@@ -108,7 +107,6 @@ export async function POST(
       console.log('✅ Formato: Uazapi original')
 
       instanceToken = payload.token
-      instanceName = payload.instance.name
       status = payload.instance.status
       qrCode = payload.instance.qrcode ?? null
       phoneNumber = payload.owner ?? null
