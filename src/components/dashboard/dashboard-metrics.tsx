@@ -2,31 +2,22 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ShoppingBag, DollarSign, Clock, TrendingUp } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
-
-interface Metrics {
-  todayOrders: number;
-  yesterdayOrders: number;
-  todayRevenue: number;
-  yesterdayRevenue: number;
-  pendingOrders: number;
-  avgTicket: number;
-  lastWeekAvgTicket: number;
-}
+import { MetricCardExpandable } from "./metric-card-expandable";
+import { useSubscription } from "@/hooks/use-subscription";
+import { useRouter } from "next/navigation";
+import type { MetricsData, MetricCard } from "@/lib/types/metrics";
 
 /* -------------------------------------------------------------------------- */
 /*                                COMPONENT                                   */
 /* -------------------------------------------------------------------------- */
 
 export function DashboardMetrics() {
+  const router = useRouter();
   const supabase = createBrowserSupabaseClient();
+  const { hasAccess, isTrialExpired, daysRemaining, plan } = useSubscription();
 
-  const [metrics, setMetrics] = useState<Metrics>({
+  const [metrics, setMetrics] = useState<MetricsData>({
     todayOrders: 0,
     yesterdayOrders: 0,
     todayRevenue: 0,
@@ -65,11 +56,15 @@ export function DashboardMetrics() {
   /* -------------------------------------------------------------------------- */
 
   const loadMetrics = useCallback(async () => {
+    if (isTrialExpired) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
 
       const now = new Date();
-
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
 
@@ -79,7 +74,10 @@ export function DashboardMetrics() {
       const lastWeek = new Date(today);
       lastWeek.setDate(lastWeek.getDate() - 7);
 
-      /* ----------------------------- Orders Count ---------------------------- */
+      const lastMonth = new Date(today);
+      lastMonth.setDate(lastMonth.getDate() - 30);
+
+      /* ----------------------------- BÁSICAS (trial/basic) ---------------------------- */
 
       const [{ count: todayOrders }, { count: yesterdayOrders }] =
         await Promise.all([
@@ -94,8 +92,6 @@ export function DashboardMetrics() {
             .gte("created_at", yesterday.toISOString())
             .lt("created_at", today.toISOString()),
         ]);
-
-      /* ------------------------------- Revenue -------------------------------- */
 
       const [{ data: todayPaid }, { data: yesterdayPaid }] = await Promise.all([
         supabase
@@ -118,19 +114,13 @@ export function DashboardMetrics() {
       const yesterdayRevenue =
         yesterdayPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
-      /* ---------------------------- Pending Orders ---------------------------- */
-
       const { count: pendingOrders } = await supabase
         .from("orders")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending");
 
-      /* ---------------------------- Avg Ticket -------------------------------- */
-
       const avgTicket =
         todayOrders && todayOrders > 0 ? todayRevenue / todayOrders : 0;
-
-      /* ------------------------ Last Week Avg Ticket -------------------------- */
 
       const { data: lastWeekPaid } = await supabase
         .from("orders")
@@ -147,7 +137,7 @@ export function DashboardMetrics() {
           ? lastWeekRevenue / lastWeekPaid.length
           : 0;
 
-      setMetrics({
+      const newMetrics: MetricsData = {
         todayOrders: todayOrders ?? 0,
         yesterdayOrders: yesterdayOrders ?? 0,
         todayRevenue,
@@ -155,33 +145,132 @@ export function DashboardMetrics() {
         pendingOrders: pendingOrders ?? 0,
         avgTicket,
         lastWeekAvgTicket,
-      });
+      };
+
+      /* ----------------------------- AVANÇADAS (pro/premium) ---------------------------- */
+
+      if (hasAccess("pro")) {
+        const { count: weekOrders } = await supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", lastWeek.toISOString());
+
+        const { data: weekPaid } = await supabase
+          .from("orders")
+          .select("total_amount")
+          .gte("created_at", lastWeek.toISOString())
+          .eq("status", "paid");
+
+        const weekRevenue =
+          weekPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+
+        const { count: cancelled } = await supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "cancelled")
+          .gte("created_at", lastWeek.toISOString());
+
+        const totalOrders = weekOrders || 0;
+        const paidOrders = weekPaid?.length || 0;
+        const conversionRate =
+          totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
+
+        newMetrics.weekOrders = weekOrders || 0;
+        newMetrics.weekRevenue = weekRevenue;
+        newMetrics.cancelledOrders = cancelled || 0;
+        newMetrics.conversionRate = conversionRate;
+      }
+
+      /* ----------------------------- COMPLETAS (premium) ---------------------------- */
+
+      if (hasAccess("premium")) {
+        // Maior ticket do dia
+        const { data: todayOrders } = await supabase
+          .from("orders")
+          .select("total_amount")
+          .gte("created_at", today.toISOString())
+          .order("total_amount", { ascending: false })
+          .limit(1);
+
+        newMetrics.highestTicketToday = todayOrders?.[0]
+          ? Number(todayOrders[0].total_amount)
+          : 0;
+
+        // Receita do mês
+        const firstDayOfMonth = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          1
+        );
+        const { data: monthPaid } = await supabase
+          .from("orders")
+          .select("total_amount")
+          .gte("created_at", firstDayOfMonth.toISOString())
+          .eq("status", "paid");
+
+        newMetrics.monthRevenue =
+          monthPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+
+        // Top produtos
+        const { data: topProductsData } = await supabase
+          .from("order_items")
+          .select("product_id, quantity, product_price, products(name)")
+          .gte("created_at", lastMonth.toISOString());
+
+        const productMap = new Map();
+        topProductsData?.forEach((item) => {
+          const productData = item.products as unknown;
+          const name =
+            productData &&
+            typeof productData === "object" &&
+            "name" in productData
+              ? (productData as { name: string }).name
+              : "Produto";
+
+          const existing = productMap.get(name) || {
+            name,
+            quantity: 0,
+            revenue: 0,
+          };
+          productMap.set(name, {
+            name,
+            quantity: existing.quantity + item.quantity,
+            revenue:
+              existing.revenue + item.quantity * Number(item.product_price),
+          });
+        });
+
+        newMetrics.topProducts = Array.from(productMap.values())
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5);
+      }
+
+      setMetrics(newMetrics);
     } catch (error) {
       console.error("❌ Erro ao carregar métricas:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, hasAccess, isTrialExpired]);
 
   /* -------------------------------------------------------------------------- */
-  /*                               REALTIME (FIX)                               */
+  /*                               REALTIME                                     */
   /* -------------------------------------------------------------------------- */
 
   useEffect(() => {
-    // 🔥 carrega imediatamente
-    loadMetrics();
+    loadMetrics().catch((err) => {
+      console.error("❌ Erro ao carregar métricas iniciais:", err);
+    });
 
     const channel = supabase
       .channel("dashboard-metrics")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
+        { event: "*", schema: "public", table: "orders" },
         () => {
-          loadMetrics();
+          loadMetrics().catch((err) => {
+            console.error("❌ Erro ao recarregar métricas (realtime):", err);
+          });
         }
       )
       .subscribe();
@@ -192,11 +281,12 @@ export function DashboardMetrics() {
   }, [supabase, loadMetrics]);
 
   /* -------------------------------------------------------------------------- */
-  /*                                   UI                                       */
+  /*                               METRICS CARDS                                */
   /* -------------------------------------------------------------------------- */
 
-  const metricsData = [
+  const metricsCards: MetricCard[] = [
     {
+      id: "today-orders",
       title: "Pedidos hoje",
       value: isLoading ? "..." : metrics.todayOrders.toString(),
       change: isLoading
@@ -205,10 +295,37 @@ export function DashboardMetrics() {
             metrics.todayOrders,
             metrics.yesterdayOrders
           )} vs ontem`,
-      icon: ShoppingBag,
       trend: metrics.todayOrders >= metrics.yesterdayOrders ? "up" : "down",
+      icon: ShoppingBag,
+      plan: "basic",
+      detailedMetrics: [
+        {
+          label: "Ontem",
+          value: metrics.yesterdayOrders,
+          plan: "basic",
+        },
+        {
+          label: "Última semana",
+          value: metrics.weekOrders || 0,
+          plan: "pro",
+          description: "Total de pedidos nos últimos 7 dias",
+        },
+        {
+          label: "Taxa de conversão",
+          value: `${metrics.conversionRate?.toFixed(1) || 0}%`,
+          plan: "pro",
+          description: "Pedidos pagos / total de pedidos",
+        },
+        {
+          label: "Pedidos cancelados",
+          value: metrics.cancelledOrders || 0,
+          plan: "premium",
+          description: "Pedidos cancelados na última semana",
+        },
+      ],
     },
     {
+      id: "revenue",
       title: "Faturamento do dia",
       value: isLoading ? "..." : formatCurrency(metrics.todayRevenue),
       change: isLoading
@@ -217,55 +334,138 @@ export function DashboardMetrics() {
             metrics.todayRevenue,
             metrics.yesterdayRevenue
           )} vs ontem`,
-      icon: DollarSign,
       trend: metrics.todayRevenue >= metrics.yesterdayRevenue ? "up" : "down",
+      icon: DollarSign,
+      plan: "basic",
+      detailedMetrics: [
+        {
+          label: "Receita de ontem",
+          value: formatCurrency(metrics.yesterdayRevenue),
+          plan: "basic",
+        },
+        {
+          label: "Receita semanal",
+          value: formatCurrency(metrics.weekRevenue || 0),
+          plan: "pro",
+          description: "Faturamento dos últimos 7 dias",
+        },
+        {
+          label: "Receita mensal projetada",
+          value: formatCurrency((metrics.weekRevenue || 0) * 4.3),
+          plan: "premium",
+          description: "Baseado na média semanal",
+        },
+        {
+          label: "Produto mais vendido",
+          value: metrics.topProducts?.[0]?.name || "Sem dados",
+          plan: "premium",
+          description: metrics.topProducts?.[0]
+            ? `${metrics.topProducts[0].quantity} vendas - ${formatCurrency(
+                metrics.topProducts[0].revenue
+              )}`
+            : "Nenhum produto vendido no mês",
+        },
+      ],
     },
     {
+      id: "pending",
       title: "Pedidos pendentes",
       value: isLoading ? "..." : metrics.pendingOrders.toString(),
       change: "Em preparo",
-      icon: Clock,
       trend: "neutral",
+      icon: Clock,
+      plan: "basic",
+      detailedMetrics: [
+        {
+          label: "Aguardando preparo",
+          value: metrics.pendingOrders,
+          plan: "basic",
+          description: "Pedidos com status 'pending'",
+        },
+        {
+          label: "Taxa de conversão",
+          value: `${metrics.conversionRate?.toFixed(1) || 0}%`,
+          plan: "pro",
+          description: "Pedidos pagos / total de pedidos",
+        },
+        {
+          label: "Pedidos cancelados",
+          value: metrics.cancelledOrders || 0,
+          plan: "pro",
+          description: "Cancelamentos na última semana",
+        },
+        {
+          label: "Taxa de sucesso",
+          value:
+            metrics.weekOrders && metrics.cancelledOrders !== undefined
+              ? `${(
+                  ((metrics.weekOrders - metrics.cancelledOrders) /
+                    metrics.weekOrders) *
+                  100
+                ).toFixed(1)}%`
+              : "N/A",
+          plan: "premium",
+          description: "Pedidos concluídos / total de pedidos",
+        },
+      ],
     },
     {
+      id: "avg-ticket",
       title: "Ticket médio",
       value: isLoading ? "..." : formatCurrency(metrics.avgTicket),
       change: isLoading
         ? "..."
-        : `${calculatePercentChange(
-            metrics.avgTicket,
-            metrics.lastWeekAvgTicket
-          )} vs semana`,
-      icon: TrendingUp,
+        : `${calculatePercentChange(metrics.avgTicket, metrics.lastWeekAvgTicket)} vs semana`,
       trend: metrics.avgTicket >= metrics.lastWeekAvgTicket ? "up" : "down",
+      icon: TrendingUp,
+      plan: "basic",
+      detailedMetrics: [
+        { 
+          label: "Ticket médio da semana", 
+          value: formatCurrency(metrics.lastWeekAvgTicket), 
+          plan: "basic",
+          description: "Média dos últimos 7 dias"
+        },
+        {
+          label: "Ticket médio do mês",
+          value: metrics.monthRevenue && metrics.weekOrders
+            ? formatCurrency(metrics.monthRevenue / (metrics.weekOrders * 4))
+            : formatCurrency(0),
+          plan: "pro",
+          description: "Média do mês atual",
+        },
+        {
+          label: "Maior pedido hoje",
+          value: formatCurrency(metrics.highestTicketToday || 0),
+          plan: "premium",
+          description: "Pedido de maior valor do dia",
+        },
+        {
+          label: "Faturamento mensal",
+          value: formatCurrency(metrics.monthRevenue || 0),
+          plan: "premium",
+          description: "Total faturado no mês atual",
+        },
+      ],
     },
   ];
 
+  /* -------------------------------------------------------------------------- */
+  /*                                   UI                                       */
+  /* -------------------------------------------------------------------------- */
+
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-      {metricsData.map((metric) => (
-        <Card key={metric.title}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {metric.title}
-            </CardTitle>
-            <metric.icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metric.value}</div>
-            <p
-              className={`text-xs ${
-                metric.trend === "up"
-                  ? "text-success"
-                  : metric.trend === "down"
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {metric.change}
-            </p>
-          </CardContent>
-        </Card>
+      {metricsCards.map((metric) => (
+        <MetricCardExpandable
+          key={metric.id}
+          metric={metric}
+          userPlan={plan}
+          hasAccess={hasAccess(metric.plan)}
+          isTrialExpired={isTrialExpired}
+          daysRemaining={daysRemaining}
+          onUpgrade={() => router.push("/dashboard/settings/billing")}
+        />
       ))}
     </div>
   );

@@ -338,10 +338,6 @@ export async function POST(
     // =====================================================
     // 5. CRIAR INSTÂNCIA UAZAPI
     // =====================================================
-    if (process.env.NODE_ENV === "development") {
-      console.log("📱 Criando instância WhatsApp...");
-    }
-
     const instanceName = sanitizeInstanceName(createdTenantId);
 
     const instance = await createInstance({
@@ -352,16 +348,10 @@ export async function POST(
     });
 
     createdInstanceToken = instance.token;
-    if (process.env.NODE_ENV === "development") {
-      console.log("✅ Instância criada:", instance.id);
-    }
 
     // =====================================================
     // 6. CONECTAR INSTÂNCIA
     // =====================================================
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔗 Conectando instância...");
-    }
 
     const connection = await connectInstanceWithRetry({
       instanceToken: instance.token,
@@ -390,7 +380,7 @@ export async function POST(
     await configureWebhook({
       instanceToken: instance.token,
       webhookUrl: process.env.N8N_WEBHOOK_URL,
-      events: ["messages", "connection", "messages_update"],
+      events: ["messages", "connection"],
     });
 
     if (process.env.NODE_ENV === "development") {
