@@ -75,7 +75,7 @@ export default function RegisterPage() {
 
         <blockquote className="space-y-2">
           <p className="text-lg leading-relaxed">
-            {'"'}O Commanda revolucionou a forma como gerenciamos nossos pedidos.
+            {'"'}O Platoo revolucionou a forma como gerenciamos nossos pedidos.
             A integração com WhatsApp trouxe muito mais agilidade no atendimento.{'"'}
           </p>
           <footer className="text-sm text-sidebar-foreground/70">
@@ -84,7 +84,7 @@ export default function RegisterPage() {
         </blockquote>
 
         <p className="text-xs text-sidebar-foreground/50">
-          © 2025 Commanda. Todos os direitos reservados.
+          © 2025 Platoo. Todos os direitos reservados.
         </p>
       </div>
 

@@ -346,7 +346,7 @@ export async function POST(
 
     const instance = await createInstance({
       name: instanceName,
-      systemName: "commanda",
+      systemName: "platoo",
       adminField01: createdTenantId,
       adminField02: process.env.NODE_ENV || "production",
     });

@@ -14,21 +14,21 @@ export function Logo({ className, variant = "full" }: LogoProps) {
           {/* Light */}
           <Image
             src="/brand/logo.svg"
-            alt="Commanda"
+            alt="Platoo"
             width={160}
             height={40}
             priority
-            className="h-11 w-auto dark:hidden"
+            className="h-10 w-auto dark:hidden"
           />
 
           {/* Dark */}
           <Image
             src="/brand/logo-white.svg"
-            alt="Commanda"
+            alt="Platoo"
             width={160}
             height={40}
             priority
-            className="hidden h-12 w-auto dark:block"
+            className="hidden h-10 w-auto dark:block"
           />
         </>
       ) : (
@@ -36,7 +36,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
           {/* Light */}
           <Image
             src="/brand/logo-icon.svg"
-            alt="Commanda"
+            alt="Platoo"
             width={36}
             height={36}
             className="h-9 w-9 dark:hidden"
@@ -45,7 +45,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
           {/* Dark */}
           <Image
             src="/brand/logo-icon-white.svg"
-            alt="Commanda"
+            alt="Platoo"
             width={36}
             height={36}
             className="hidden h-13 w-13 dark:block"

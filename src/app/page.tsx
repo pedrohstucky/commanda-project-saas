@@ -427,7 +427,7 @@ export default function LandingPage() {
               </Link>
             </nav>
             <p className="text-sm text-muted-foreground">
-              © 2025 Commanda. Todos os direitos reservados.
+              © 2025 Platoo. Todos os direitos reservados.
             </p>
           </div>
         </div>

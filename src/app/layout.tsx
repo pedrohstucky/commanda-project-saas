@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 
 /* Metadata */
 export const metadata: Metadata = {
-  title: "Commanda | Automatize os Pedidos do seu Restaurante",
-  description: "SaaS de pedidos e automação para restaurantes",
+  title: "Platoo | Automatize os Pedidos do seu Restaurante",
+  description: "Sistema de comanda para restaurantes e automação de atendimento",
   icons: {
     icon: [
       { url: "/favicon/favicon.ico" },
