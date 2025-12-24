@@ -38,7 +38,6 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Erro ao criar conta')
       }
 
-      // 🔐 Login automático
       if (data.data?.credentials) {
         const { error: signInError } =
           await supabase.auth.signInWithPassword({
@@ -57,8 +56,12 @@ export default function RegisterPage() {
 
       router.push('/onboarding/whatsapp')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('Erro inesperado ao criar conta')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -72,8 +75,8 @@ export default function RegisterPage() {
 
         <blockquote className="space-y-2">
           <p className="text-lg leading-relaxed">
-            "O Commanda revolucionou a forma como gerenciamos nossos pedidos.
-            A integração com WhatsApp trouxe muito mais agilidade no atendimento."
+            {'"'}O Commanda revolucionou a forma como gerenciamos nossos pedidos.
+            A integração com WhatsApp trouxe muito mais agilidade no atendimento.{'"'}
           </p>
           <footer className="text-sm text-sidebar-foreground/70">
             Maria Santos — Chef e Proprietária, Bistrô Aconchego
@@ -177,7 +180,10 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             Já tem uma conta?{' '}
-            <Link href="/login" className="font-medium text-primary hover:underline">
+            <Link
+              href="/login"
+              className="font-medium text-primary hover:underline"
+            >
               Fazer login
             </Link>
           </p>

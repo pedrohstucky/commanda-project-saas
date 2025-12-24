@@ -1,18 +1,22 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { 
-  Bell, 
-  ChevronDown, 
-  Package, 
-  DollarSign, 
-  Volume2, 
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import type {
+  RealtimePostgresInsertPayload,
+  RealtimePostgresUpdatePayload,
+} from "@supabase/supabase-js";
+import {
+  Bell,
+  ChevronDown,
+  Package,
+  DollarSign,
+  Volume2,
   VolumeX,
-  Menu as MenuIcon
-} from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
+  Menu as MenuIcon,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,34 +24,41 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+} from "@/components/ui/popover";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+
+interface OrderRow {
+  id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+}
 
 interface DashboardHeaderProps {
-  restaurantName?: string
-  userName?: string
-  onMenuClick?: () => void
+  restaurantName?: string;
+  userName?: string;
+  onMenuClick?: () => void;
 }
 
 interface Notification {
-  id: string
-  type: 'new_order' | 'paid_order'
-  title: string
-  message: string
-  order_id: string
-  created_at: string
+  id: string;
+  type: "new_order" | "paid_order";
+  title: string;
+  message: string;
+  order_id: string;
+  created_at: string;
 }
 
 interface Order {
-  id: string
-  total_amount: number
-  status: string
-  created_at: string
+  id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
 }
 
 export function DashboardHeader({
@@ -55,55 +66,55 @@ export function DashboardHeader({
   userName,
   onMenuClick,
 }: DashboardHeaderProps) {
-  const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioUnlockedRef = useRef<boolean>(false)
-  
+  const router = useRouter();
+  const supabase = createBrowserSupabaseClient();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUnlockedRef = useRef<boolean>(false);
+
   const [userData, setUserData] = useState({
     restaurantName: restaurantName || "Carregando...",
-    userName: userName || "Usuário"
-  })
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
-  const [soundEnabled, setSoundEnabled] = useState(true)
+    userName: userName || "Usuário",
+  });
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   useEffect(() => {
     // Criar áudio
-    audioRef.current = new Audio('/notification.mp3')
-    audioRef.current.volume = 0.5
-    audioRef.current.preload = 'auto'
-    
+    audioRef.current = new Audio("/notification.mp3");
+    audioRef.current.volume = 0.5;
+    audioRef.current.preload = "auto";
+
     // Desbloquear áudio em mobile na primeira interação
     // unlockAudioOnInteraction()
-    
-    loadUserData()
-    loadInitialNotifications()
-    
-    const cleanup = setupRealtimeListeners()
-    
-    const savedSoundPref = localStorage.getItem('notificationSound')
+
+    loadUserData();
+    loadInitialNotifications();
+
+    const cleanup = setupRealtimeListeners();
+
+    const savedSoundPref = localStorage.getItem("notificationSound");
     if (savedSoundPref !== null) {
-      setSoundEnabled(savedSoundPref === 'true')
+      setSoundEnabled(savedSoundPref === "true");
     }
 
     return () => {
       if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
+        audioRef.current.pause();
+        audioRef.current = null;
       }
-      cleanup()
-    }
-  }, [])
+      cleanup();
+    };
+  }, []);
 
   useEffect(() => {
     if (isPopoverOpen) {
-      markAllAsRead()
+      markAllAsRead();
     }
-  }, [isPopoverOpen])
+  }, [isPopoverOpen]);
 
-/* function unlockAudioOnInteraction() {
+  /* function unlockAudioOnInteraction() {
     // Lista de eventos de interação do usuário
     const events = ['touchstart', 'touchend', 'mousedown', 'click']
     
@@ -142,254 +153,249 @@ export function DashboardHeader({
 
   async function loadUserData() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (user) {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, tenant_id')
-          .eq('id', user.id)
-          .single()
+          .from("profiles")
+          .select("full_name, tenant_id")
+          .eq("id", user.id)
+          .single();
 
         if (profile) {
           const { data: tenant } = await supabase
-            .from('tenants')
-            .select('name')
-            .eq('id', profile.tenant_id)
-            .single()
+            .from("tenants")
+            .select("name")
+            .eq("id", profile.tenant_id)
+            .single();
 
           setUserData({
             restaurantName: tenant?.name || "Restaurante",
-            userName: profile.full_name || user.email?.split('@')[0] || "Usuário"
-          })
+            userName:
+              profile.full_name || user.email?.split("@")[0] || "Usuário",
+          });
         }
       }
-    } catch (error) {
-      console.error('Erro ao carregar dados do usuário:', error)
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Erro inesperado";
+      console.error(message);
     }
   }
 
   async function loadInitialNotifications() {
     try {
-      const thirtyMinutesAgo = new Date()
-      thirtyMinutesAgo.setMinutes(thirtyMinutesAgo.getMinutes() - 30)
+      const thirtyMinutesAgo = new Date();
+      thirtyMinutesAgo.setMinutes(thirtyMinutesAgo.getMinutes() - 30);
 
       const { data: recentOrders } = await supabase
-        .from('orders')
-        .select('id, total_amount, status, created_at')
-        .gte('created_at', thirtyMinutesAgo.toISOString())
-        .order('created_at', { ascending: false })
+        .from("orders")
+        .select("id, total_amount, status, created_at")
+        .gte("created_at", thirtyMinutesAgo.toISOString())
+        .order("created_at", { ascending: false });
 
       if (recentOrders) {
-        const notifs: Notification[] = recentOrders.map(order => ({
+        const notifs: Notification[] = recentOrders.map((order) => ({
           id: `order-${order.id}`,
-          type: order.status === 'paid' ? 'paid_order' : 'new_order',
-          title: order.status === 'paid' ? '✅ Pedido Pago' : '🆕 Novo Pedido',
-          message: order.status === 'paid' 
-            ? `Pagamento de ${formatCurrency(order.total_amount)} confirmado`
-            : `Novo pedido de ${formatCurrency(order.total_amount)} recebido`,
+          type: order.status === "paid" ? "paid_order" : "new_order",
+          title: order.status === "paid" ? "✅ Pedido Pago" : "🆕 Novo Pedido",
+          message:
+            order.status === "paid"
+              ? `Pagamento de ${formatCurrency(order.total_amount)} confirmado`
+              : `Novo pedido de ${formatCurrency(order.total_amount)} recebido`,
           order_id: order.id,
-          created_at: order.created_at
-        }))
+          created_at: order.created_at,
+        }));
 
-        setNotifications(notifs)
-        setUnreadCount(notifs.length)
+        setNotifications(notifs);
+        setUnreadCount(notifs.length);
       }
-    } catch (error) {
-      console.error('Erro ao carregar notificações:', error)
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Erro inesperado";
+      console.error(message);
     }
   }
 
   function setupRealtimeListeners() {
-    console.log('🔔 [Notificações] Configurando Realtime...')
-
     const channel = supabase
-      .channel('notifications-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload: any) => {
-          console.log('🆕 [Realtime] Novo pedido recebido:', payload.new)
-          
-          const newNotification: Notification = {
-            id: `order-${payload.new.id}`,
-            type: 'new_order',
-            title: '🆕 Novo Pedido',
-            message: `Novo pedido de ${formatCurrency(payload.new.total_amount)} recebido`,
-            order_id: payload.new.id,
-            created_at: payload.new.created_at
-          }
+      .channel("notifications-realtime")
 
-          setNotifications(prev => [newNotification, ...prev])
-          setUnreadCount(prev => prev + 1)
-          playNotificationSound()
-          
-          console.log('✅ [Realtime] Notificação adicionada')
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "orders",
+        },
+        (payload: RealtimePostgresInsertPayload<OrderRow>) => {
+          const order = payload.new;
+
+          const newNotification: Notification = {
+            id: `order-${order.id}`,
+            type: "new_order",
+            title: "🆕 Novo Pedido",
+            message: `Novo pedido de ${formatCurrency(
+              order.total_amount
+            )} recebido`,
+            order_id: order.id,
+            created_at: order.created_at,
+          };
+
+          setNotifications((prev) => [newNotification, ...prev]);
+          setUnreadCount((prev) => prev + 1);
+          playNotificationSound();
         }
       )
+
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders'
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
         },
-        (payload: any) => {
-          console.log('🔄 [Realtime] Pedido atualizado:', payload.new)
-          
-          const oldStatus = payload.old && 'status' in payload.old ? payload.old.status : null
-          const newStatus = payload.new.status
-          
-          if (newStatus === 'paid' && oldStatus !== 'paid') {
-            console.log('💰 [Realtime] Pedido pago detectado!')
-            
+        (payload: RealtimePostgresUpdatePayload<OrderRow>) => {
+          const oldStatus = payload.old?.status;
+          const newStatus = payload.new.status;
+
+          if (newStatus === "paid" && oldStatus !== "paid") {
             const newNotification: Notification = {
               id: `paid-${payload.new.id}-${Date.now()}`,
-              type: 'paid_order',
-              title: '✅ Pedido Pago',
-              message: `Pagamento de ${formatCurrency(payload.new.total_amount)} confirmado`,
+              type: "paid_order",
+              title: "✅ Pedido Pago",
+              message: `Pagamento de ${formatCurrency(
+                payload.new.total_amount
+              )} confirmado`,
               order_id: payload.new.id,
-              created_at: new Date().toISOString()
-            }
+              created_at: new Date().toISOString(),
+            };
 
-            setNotifications(prev => [newNotification, ...prev])
-            setUnreadCount(prev => prev + 1)
-            playNotificationSound()
-            
-            console.log('✅ [Realtime] Notificação de pagamento adicionada')
+            setNotifications((prev) => [newNotification, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+            playNotificationSound();
           }
         }
       )
-      .subscribe((status, err) => {
-        console.log('📡 [Realtime Notificações] Status:', status)
-        
-        if (err) {
-          console.error('❌ [Realtime Notificações] Erro:', err)
-        }
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ [Realtime Notificações] Conectado com sucesso!')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ [Realtime Notificações] Erro no canal')
-        } else if (status === 'TIMED_OUT') {
-          console.error('⏱️ [Realtime Notificações] Timeout')
-        } else if (status === 'CLOSED') {
-          console.log('🔒 [Realtime Notificações] Canal fechado')
-        }
-      })
+
+      .subscribe();
 
     return () => {
-      console.log('🧹 [Notificações] Limpando canal Realtime')
-      supabase.removeChannel(channel)
-    }
+      supabase.removeChannel(channel);
+    };
   }
 
   function playNotificationSound() {
     if (!soundEnabled || !audioRef.current) {
-      console.log('🔇 [Som] Som desabilitado ou áudio não inicializado')
-      return
+      console.log("🔇 [Som] Som desabilitado ou áudio não inicializado");
+      return;
     }
 
     // Verificar se áudio foi desbloqueado (especialmente em mobile)
     if (!audioUnlockedRef.current) {
-      console.log('🔒 [Som] Áudio ainda bloqueado. Use vibração como fallback.')
-      
+      console.log(
+        "🔒 [Som] Áudio ainda bloqueado. Use vibração como fallback."
+      );
+
       // Fallback: Usar vibração em mobile
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200]) // Vibrar 200ms, pausa 100ms, vibrar 200ms
-        console.log('📳 [Som] Vibração ativada como fallback')
+      if ("vibrate" in navigator) {
+        navigator.vibrate([200, 100, 200]); // Vibrar 200ms, pausa 100ms, vibrar 200ms
+        console.log("📳 [Som] Vibração ativada como fallback");
       }
-      
-      return
+
+      return;
     }
 
     try {
-      audioRef.current.currentTime = 0
-      const playPromise = audioRef.current.play()
-      
+      audioRef.current.currentTime = 0;
+      const playPromise = audioRef.current.play();
+
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log('🔊 [Som] Reproduzindo notification.mp3')
+            console.log("🔊 [Som] Reproduzindo notification.mp3");
           })
           .catch((error) => {
-            console.log('⚠️ [Som] Não foi possível tocar (bloqueado pelo navegador):', error.message)
-            
+            console.log(
+              "⚠️ [Som] Não foi possível tocar (bloqueado pelo navegador):",
+              error.message
+            );
+
             // Fallback: vibração
-            if ('vibrate' in navigator) {
-              navigator.vibrate([200, 100, 200])
-              console.log('📳 [Som] Usando vibração como alternativa')
+            if ("vibrate" in navigator) {
+              navigator.vibrate([200, 100, 200]);
+              console.log("📳 [Som] Usando vibração como alternativa");
             }
-          })
+          });
       }
-    } catch (error) {
-      console.error('❌ [Som] Erro ao tentar tocar:', error)
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Erro inesperado";
+      console.error(message);
     }
   }
 
   function toggleSound() {
-    const newState = !soundEnabled
-    setSoundEnabled(newState)
-    localStorage.setItem('notificationSound', newState.toString())
-    
-    console.log(`🔊 [Som] ${newState ? 'Ativado' : 'Desativado'}`)
-    
+    const newState = !soundEnabled;
+    setSoundEnabled(newState);
+    localStorage.setItem("notificationSound", newState.toString());
+
+    console.log(`🔊 [Som] ${newState ? "Ativado" : "Desativado"}`);
+
     // Tocar som de teste ao ativar (e desbloquear áudio mobile)
     if (newState) {
-      playNotificationSound()
+      playNotificationSound();
     }
   }
 
   function markAllAsRead() {
-    setUnreadCount(0)
+    setUnreadCount(0);
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/')
+    await supabase.auth.signOut();
+    router.push("/");
   }
 
   function formatCurrency(value: number) {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
   }
 
   function formatNotificationTime(date: string) {
-    const now = new Date()
-    const notifDate = new Date(date)
-    const diffMs = now.getTime() - notifDate.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
+    const now = new Date();
+    const notifDate = new Date(date);
+    const diffMs = now.getTime() - notifDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'Agora'
-    if (diffMins < 60) return `${diffMins}m atrás`
-    
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h atrás`
-    
-    return notifDate.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit'
-    })
+    if (diffMins < 1) return "Agora";
+    if (diffMins < 60) return `${diffMins}m atrás`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h atrás`;
+
+    return notifDate.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
   }
 
   function getNotificationIcon(type: string) {
-    if (type === 'paid_order') {
-      return <DollarSign className="h-4 w-4" />
+    if (type === "paid_order") {
+      return <DollarSign className="h-4 w-4" />;
     }
-    return <Package className="h-4 w-4" />
+    return <Package className="h-4 w-4" />;
   }
 
   function getNotificationColor(type: string) {
-    if (type === 'paid_order') {
-      return 'bg-success/10 border-success/20'
+    if (type === "paid_order") {
+      return "bg-success/10 border-success/20";
     }
-    return 'bg-primary/10 border-primary/20'
+    return "bg-primary/10 border-primary/20";
   }
 
   return (
@@ -397,9 +403,9 @@ export function DashboardHeader({
       {/* Mobile Menu + Restaurant Name */}
       <div className="flex items-center gap-3">
         {/* Mobile Menu Button */}
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="lg:hidden"
           onClick={onMenuClick}
         >
@@ -415,11 +421,13 @@ export function DashboardHeader({
       {/* Actions */}
       <div className="flex items-center gap-2 sm:gap-4">
         {/* Sound Toggle */}
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           onClick={toggleSound}
-          title={soundEnabled ? 'Desativar som/vibração' : 'Ativar som/vibração'}
+          title={
+            soundEnabled ? "Desativar som/vibração" : "Ativar som/vibração"
+          }
           className="hidden sm:flex"
         >
           {soundEnabled ? (
@@ -436,7 +444,7 @@ export function DashboardHeader({
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground animate-pulse">
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                  {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </Button>
@@ -465,16 +473,22 @@ export function DashboardHeader({
                 notifications.map((notif) => (
                   <div
                     key={notif.id}
-                    className={`p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${getNotificationColor(notif.type)}`}
+                    className={`p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${getNotificationColor(
+                      notif.type
+                    )}`}
                     onClick={() => {
-                      setIsPopoverOpen(false)
-                      router.push('/dashboard/orders')
+                      setIsPopoverOpen(false);
+                      router.push("/dashboard/orders");
                     }}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        notif.type === 'paid_order' ? 'bg-success/20' : 'bg-primary/20'
-                      }`}>
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                          notif.type === "paid_order"
+                            ? "bg-success/20"
+                            : "bg-primary/20"
+                        }`}
+                      >
                         {getNotificationIcon(notif.type)}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -499,8 +513,10 @@ export function DashboardHeader({
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 pl-2 pr-1">
               <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
-                <AvatarImage 
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(userData.userName)}&background=0ea5e9&color=fff&size=128`}
+                <AvatarImage
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    userData.userName
+                  )}&background=0ea5e9&color=fff&size=128`}
                   alt={userData.userName}
                 />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
@@ -519,19 +535,24 @@ export function DashboardHeader({
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
+            <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
               Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+            <DropdownMenuItem
+              onClick={() => router.push("/dashboard/settings")}
+            >
               Configurações
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={handleSignOut}
+            >
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </header>
-  )
+  );
 }
