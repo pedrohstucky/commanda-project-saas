@@ -1,7 +1,8 @@
 {
-  "name": "commanda-project-saas",
+  "name": "platoo-project-saas",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.6.1",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
