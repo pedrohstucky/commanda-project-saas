@@ -49,6 +49,32 @@ export default function OrdersPage() {
     cancelled: 0,
   });
 
+  const loadOrderCounts = useCallback(
+    async (tenantId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("status")
+          .eq("tenant_id", tenantId);
+
+        if (error || !data) return;
+
+        const counts = {
+          all: data.length,
+          pending: data.filter((o) => o.status === "pending").length,
+          preparing: data.filter((o) => o.status === "preparing").length,
+          completed: data.filter((o) => o.status === "completed").length,
+          cancelled: data.filter((o) => o.status === "cancelled").length,
+        };
+
+        setOrderCounts(counts);
+      } catch (error) {
+        console.error("Erro ao carregar contadores:", error);
+      }
+    },
+    [supabase]
+  );
+
   const loadOrders = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -145,33 +171,13 @@ export default function OrdersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, filters, pagination.page, pagination.pageSize]);
-
-  const loadOrderCounts = useCallback(
-    async (tenantId: string) => {
-      try {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("status")
-          .eq("tenant_id", tenantId);
-
-        if (error || !data) return;
-
-        const counts = {
-          all: data.length,
-          pending: data.filter((o) => o.status === "pending").length,
-          preparing: data.filter((o) => o.status === "preparing").length,
-          completed: data.filter((o) => o.status === "completed").length,
-          cancelled: data.filter((o) => o.status === "cancelled").length,
-        };
-
-        setOrderCounts(counts);
-      } catch (error) {
-        console.error("Erro ao carregar contadores:", error);
-      }
-    },
-    [supabase]
-  );
+  }, [
+    supabase,
+    filters,
+    pagination.page,
+    pagination.pageSize,
+    loadOrderCounts,
+  ]);
 
   const handleAccept = useCallback(
     async (orderId: string) => {

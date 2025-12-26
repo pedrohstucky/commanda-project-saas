@@ -1,3 +1,5 @@
+'use client'
+
 import { NotificationSettings } from "@/components/dashboard/notification-settings"
 
 export default function SettingsPage() {

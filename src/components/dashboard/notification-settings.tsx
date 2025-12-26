@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Bell, BellOff, Volume2, VolumeX } from "lucide-react"
@@ -10,25 +16,27 @@ import { toast } from "sonner"
 
 /**
  * Componente para configurar notificações
- * 
- * Permite habilitar/desabilitar:
- * - Desktop notifications
- * - Som de notificação
  */
 export function NotificationSettings() {
   const [desktopEnabled, setDesktopEnabled] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
-  const [permission, setPermission] = useState<NotificationPermission>("default")
+  const [permission, setPermission] =
+    useState<NotificationPermission>("default")
+  const [hasNotificationSupport, setHasNotificationSupport] = useState(true)
 
   useEffect(() => {
-    // Carregar preferências salvas
+    // Verificar suporte a Notification API
+    const supported = "Notification" in window
+    setHasNotificationSupport(supported)
+
+    // Carregar preferência de som
     const savedSound = localStorage.getItem("notificationSound")
     if (savedSound !== null) {
       setSoundEnabled(savedSound === "true")
     }
 
-    // Verificar permissão de notificações
-    if ("Notification" in window) {
+    // Verificar permissão
+    if (supported) {
       setPermission(Notification.permission)
       setDesktopEnabled(Notification.permission === "granted")
     }
@@ -40,7 +48,7 @@ export function NotificationSettings() {
   const requestPermission = async () => {
     if (!("Notification" in window)) {
       toast.error("Notificações não suportadas", {
-        description: "Seu navegador não suporta notificações desktop"
+        description: "Seu navegador não suporta notificações desktop",
       })
       return
     }
@@ -51,20 +59,20 @@ export function NotificationSettings() {
 
       if (result === "granted") {
         setDesktopEnabled(true)
-        
-        // Enviar notificação de teste
+
         new Notification("🎉 Notificações Ativadas!", {
           body: "Você receberá alertas quando novos pedidos chegarem",
-          icon: "/logo.png",
-          badge: "/logo.png"
+          icon: "brand/logo.png",
+          badge: "brand/logo.png",
         })
 
         toast.success("Notificações ativadas!", {
-          description: "Você receberá alertas de novos pedidos"
+          description: "Você receberá alertas de novos pedidos",
         })
       } else if (result === "denied") {
         toast.error("Permissão negada", {
-          description: "Você bloqueou as notificações. Ative nas configurações do navegador."
+          description:
+            "Você bloqueou as notificações. Ative nas configurações do navegador.",
         })
       }
     } catch (error) {
@@ -79,7 +87,7 @@ export function NotificationSettings() {
   const disableNotifications = () => {
     setDesktopEnabled(false)
     toast.info("Notificações desativadas", {
-      description: "Você não receberá mais alertas desktop"
+      description: "Você não receberá mais alertas desktop",
     })
   }
 
@@ -89,11 +97,11 @@ export function NotificationSettings() {
   const toggleSound = (enabled: boolean) => {
     setSoundEnabled(enabled)
     localStorage.setItem("notificationSound", String(enabled))
-    
+
     toast.success(enabled ? "Som ativado" : "Som desativado", {
-      description: enabled 
-        ? "Você ouvirá um alerta sonoro para novos pedidos" 
-        : "Alertas sonoros foram desativados"
+      description: enabled
+        ? "Você ouvirá um alerta sonoro para novos pedidos"
+        : "Alertas sonoros foram desativados",
     })
   }
 
@@ -107,7 +115,7 @@ export function NotificationSettings() {
         icon: "/logo.png",
         badge: "/logo.png",
         tag: "test-notification",
-        requireInteraction: false
+        requireInteraction: false,
       })
 
       toast.success("Notificação enviada!")
@@ -122,6 +130,7 @@ export function NotificationSettings() {
           Configure como você deseja ser notificado sobre novos pedidos
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-6">
         {/* Desktop Notifications */}
         <div className="flex items-center justify-between">
@@ -134,18 +143,15 @@ export function NotificationSettings() {
               Receba alertas do navegador quando novos pedidos chegarem
             </p>
           </div>
+
           <div className="flex items-center gap-2">
             {permission === "granted" ? (
               <>
                 <Switch
                   checked={desktopEnabled}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setDesktopEnabled(true)
-                    } else {
-                      disableNotifications()
-                    }
-                  }}
+                  onCheckedChange={(checked) =>
+                    checked ? setDesktopEnabled(true) : disableNotifications()
+                  }
                 />
                 <Button
                   variant="outline"
@@ -182,14 +188,11 @@ export function NotificationSettings() {
               Tocar som quando novos pedidos chegarem
             </p>
           </div>
-          <Switch
-            checked={soundEnabled}
-            onCheckedChange={toggleSound}
-          />
+          <Switch checked={soundEnabled} onCheckedChange={toggleSound} />
         </div>
 
-        {/* Info sobre notificações */}
-        {!("Notification" in window) && (
+        {/* Aviso de suporte */}
+        {!hasNotificationSupport && (
           <div className="rounded-lg bg-muted p-3">
             <div className="flex gap-2">
               <BellOff className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
@@ -198,8 +201,8 @@ export function NotificationSettings() {
                   Notificações não suportadas
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Seu navegador não suporta notificações desktop. 
-                  Tente usar Chrome, Firefox, Edge ou Safari.
+                  Seu navegador não suporta notificações desktop. Tente usar
+                  Chrome, Firefox, Edge ou Safari.
                 </p>
               </div>
             </div>
