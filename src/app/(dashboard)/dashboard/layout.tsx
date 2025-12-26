@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { Toaster } from "sonner"
 
 export default function DashboardLayout({
   children,
@@ -86,6 +87,9 @@ export default function DashboardLayout({
         />
         <main className="p-4 sm:p-6">{children}</main>
       </div>
+
+      {/* Toaster do Sonner - notificações toast */}
+      <Toaster position="top-right" richColors />
     </div>
   )
 }

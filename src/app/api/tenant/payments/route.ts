@@ -96,13 +96,12 @@ export async function POST(
         payment_method: body.payment_method,
         amount: body.amount,
         status: 'completed',
-        processed_by: order.created_by
       })
       .select('id, order_id, amount')
       .single()
 
     if (paymentError || !payment) {
-      console.error('❌ Erro ao criar pagamento:', paymentError)
+      console.error('❌ Erro ao criar pagamentos:', paymentError)
       throw paymentError
     }
 

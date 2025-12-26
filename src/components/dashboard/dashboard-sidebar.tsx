@@ -10,7 +10,8 @@ import {
   Menu as MenuIcon, 
   Settings, 
   LogOut, 
-  MessageCircle
+  MessageCircle,
+  FolderOpen
 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { cn } from "@/lib/utils"
@@ -18,11 +19,13 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { PendingOrdersBadge } from "./pending-orders-badge"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Pedidos", href: "/dashboard/orders", icon: ClipboardList },
+  { name: "Pedidos", href: "/dashboard/orders", icon: ClipboardList, showBadge: true },
   { name: "Cardápio", href: "/dashboard/products", icon: MenuIcon },
+  { name: "Categorias", href: "/dashboard/products/categories", icon: FolderOpen }, // ← NOVO
   { name: "WhatsApp", href: "/onboarding/whatsapp", icon: MessageCircle },
   { name: "Configurações", href: "/dashboard/settings", icon: Settings },
 ]
@@ -158,7 +161,9 @@ export function DashboardSidebar({
                   )}
                 >
                   <item.icon className="h-5 w-5 shrink-0" />
-                  <span>{item.name}</span>
+                  <span className="flex-1">{item.name}</span>
+                  {/* Badge de pedidos pending */}
+                  {item.showBadge && <PendingOrdersBadge />}
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right" className="lg:hidden">

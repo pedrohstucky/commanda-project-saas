@@ -7,7 +7,7 @@ import {
   connectInstanceWithRetry,
 } from "@/lib/uazapi/client";
 import { generateApiKey } from "@/lib/utils";
-import type { Database } from "@/types/database";
+import type { Database } from "@/lib/types/database";
 
 // Types auxiliares
 type TenantInsert = Database["public"]["Tables"]["tenants"]["Insert"];

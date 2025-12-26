@@ -1,41 +1,74 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   createInstance,
   configureWebhook,
   connectInstanceWithRetry,
 } from "@/lib/uazapi/client";
 import { generateApiKey } from "@/lib/utils";
-import type { Database } from "@/types/database";
+import type { Database } from "@/lib/types/database";
 
 type WhatsAppInstanceInsert =
   Database["public"]["Tables"]["whatsapp_instances"]["Insert"];
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    console.log("=== CREATE INSTANCE START ===");
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const body = await request.json().catch(() => ({}));
+    const { tenantId } = body;
+
+    // Verificar se é chamada do Inngest
+    const inngestSecret = request.headers.get("x-inngest-secret");
+    
+    console.log("Headers recebidos:", {
+      inngestSecret: inngestSecret ? "presente" : "ausente",
+      expectedSecret: process.env.INNGEST_INTERNAL_SECRET ? "configurado" : "não configurado"
+    });
+    
+    console.log("Body recebido:", { tenantId });
+
+    let finalTenantId: string;
+
+    if (inngestSecret === process.env.INNGEST_INTERNAL_SECRET && tenantId) {
+      // Chamada do Inngest - usar tenantId do body
+      finalTenantId = tenantId;
+      console.log("🔧 Chamada do Inngest para tenant:", finalTenantId);
+    } else {
+      // Chamada normal - verificar auth
+      const supabase = await createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.log("❌ Erro de autenticação:", authError);
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile) {
+        console.log("❌ Perfil não encontrado");
+        return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
+      }
+
+      finalTenantId = profile.tenant_id;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tenant_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile) {
-      return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
-    }
+    console.log("Tenant ID final:", finalTenantId);
 
     // Verificar se subscription está ativa
-    const { data: tenant } = await supabase
+    const { data: tenant } = await supabaseAdmin
       .from("tenants")
       .select("subscription_status, name")
-      .eq("id", profile.tenant_id)
+      .eq("id", finalTenantId)
       .single();
+
+    console.log("Tenant data:", tenant);
 
     if (tenant?.subscription_status !== 'active') {
       return NextResponse.json({ 
@@ -44,18 +77,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Deletar instância antiga se existir
-    const { data: existingInstance } = await supabase
+    const { data: existingInstance } = await supabaseAdmin
       .from("whatsapp_instances")
       .select("id, instance_token")
-      .eq("tenant_id", profile.tenant_id)
+      .eq("tenant_id", finalTenantId)
       .single();
 
     if (existingInstance) {
       console.log("Deletando instância antiga...");
-      await supabase
+      await supabaseAdmin
         .from("whatsapp_instances")
         .delete()
-        .eq("tenant_id", profile.tenant_id);
+        .eq("tenant_id", finalTenantId);
     }
 
     // Verificar ENV vars
@@ -65,16 +98,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar nome da instância
-    const instanceName = `tenant_${profile.tenant_id.substring(0, 8)}`;
+    const instanceName = `tenant_${finalTenantId.substring(0, 8)}`;
     
     console.log("📱 Criando instância Uazapi:", instanceName);
 
     // Criar instância na Uazapi
     const instance = await createInstance({
       name: instanceName,
-      systemName: "commanda",
-      adminField01: profile.tenant_id,
-      adminField02: user.id,
+      systemName: "platoo",
+      adminField01: finalTenantId,
+      adminField02: "system",
     });
 
     console.log("✅ Instância criada:", instance.id);
@@ -106,11 +139,11 @@ export async function POST(request: NextRequest) {
     console.log("✅ Webhook configurado");
 
     // Gerar API Key
-    const apiKey = generateApiKey(profile.tenant_id);
+    const apiKey = generateApiKey(finalTenantId);
 
     // Salvar no banco
     const instanceInsert: WhatsAppInstanceInsert = {
-      tenant_id: profile.tenant_id,
+      tenant_id: finalTenantId,
       instance_id: instance.id,
       instance_token: instance.token,
       instance_name: instanceName,
@@ -124,7 +157,7 @@ export async function POST(request: NextRequest) {
       webhook_url: process.env.N8N_WEBHOOK_URL,
     };
 
-    const { data: newInstance, error: insertError } = await supabase
+    const { data: newInstance, error: insertError } = await supabaseAdmin
       .from("whatsapp_instances")
       .insert(instanceInsert)
       .select()
@@ -139,6 +172,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("✅ Instância salva no banco");
+    console.log("=== CREATE INSTANCE END ===");
 
     return NextResponse.json({
       success: true,

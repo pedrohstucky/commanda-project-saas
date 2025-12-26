@@ -93,26 +93,27 @@ export function DashboardMetrics() {
             .lt("created_at", today.toISOString()),
         ]);
 
-      const [{ data: todayPaid }, { data: yesterdayPaid }] = await Promise.all([
+      // ✅ CORRIGIDO: paid → completed
+      const [{ data: todayCompleted }, { data: yesterdayCompleted }] = await Promise.all([
         supabase
           .from("orders")
           .select("total_amount")
           .gte("created_at", today.toISOString())
-          .eq("status", "paid"),
+          .eq("status", "completed"),
 
         supabase
           .from("orders")
           .select("total_amount")
           .gte("created_at", yesterday.toISOString())
           .lt("created_at", today.toISOString())
-          .eq("status", "paid"),
+          .eq("status", "completed"),
       ]);
 
       const todayRevenue =
-        todayPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        todayCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
       const yesterdayRevenue =
-        yesterdayPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        yesterdayCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
       const { count: pendingOrders } = await supabase
         .from("orders")
@@ -122,19 +123,20 @@ export function DashboardMetrics() {
       const avgTicket =
         todayOrders && todayOrders > 0 ? todayRevenue / todayOrders : 0;
 
-      const { data: lastWeekPaid } = await supabase
+      // ✅ CORRIGIDO: paid → completed
+      const { data: lastWeekCompleted } = await supabase
         .from("orders")
         .select("total_amount")
         .gte("created_at", lastWeek.toISOString())
         .lt("created_at", today.toISOString())
-        .eq("status", "paid");
+        .eq("status", "completed");
 
       const lastWeekRevenue =
-        lastWeekPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        lastWeekCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
       const lastWeekAvgTicket =
-        lastWeekPaid && lastWeekPaid.length > 0
-          ? lastWeekRevenue / lastWeekPaid.length
+        lastWeekCompleted && lastWeekCompleted.length > 0
+          ? lastWeekRevenue / lastWeekCompleted.length
           : 0;
 
       const newMetrics: MetricsData = {
@@ -155,14 +157,15 @@ export function DashboardMetrics() {
           .select("*", { count: "exact", head: true })
           .gte("created_at", lastWeek.toISOString());
 
-        const { data: weekPaid } = await supabase
+        // ✅ CORRIGIDO: paid → completed
+        const { data: weekCompleted } = await supabase
           .from("orders")
           .select("total_amount")
           .gte("created_at", lastWeek.toISOString())
-          .eq("status", "paid");
+          .eq("status", "completed");
 
         const weekRevenue =
-          weekPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+          weekCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
         const { count: cancelled } = await supabase
           .from("orders")
@@ -171,9 +174,11 @@ export function DashboardMetrics() {
           .gte("created_at", lastWeek.toISOString());
 
         const totalOrders = weekOrders || 0;
-        const paidOrders = weekPaid?.length || 0;
+        const completedOrders = weekCompleted?.length || 0;
+        
+        // ✅ CORRIGIDO: Taxa de conversão agora usa "completed"
         const conversionRate =
-          totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
+          totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
 
         newMetrics.weekOrders = weekOrders || 0;
         newMetrics.weekRevenue = weekRevenue;
@@ -185,15 +190,15 @@ export function DashboardMetrics() {
 
       if (hasAccess("premium")) {
         // Maior ticket do dia
-        const { data: todayOrders } = await supabase
+        const { data: todayOrdersData } = await supabase
           .from("orders")
           .select("total_amount")
           .gte("created_at", today.toISOString())
           .order("total_amount", { ascending: false })
           .limit(1);
 
-        newMetrics.highestTicketToday = todayOrders?.[0]
-          ? Number(todayOrders[0].total_amount)
+        newMetrics.highestTicketToday = todayOrdersData?.[0]
+          ? Number(todayOrdersData[0].total_amount)
           : 0;
 
         // Receita do mês
@@ -202,14 +207,16 @@ export function DashboardMetrics() {
           today.getMonth(),
           1
         );
-        const { data: monthPaid } = await supabase
+        
+        // ✅ CORRIGIDO: paid → completed
+        const { data: monthCompleted } = await supabase
           .from("orders")
           .select("total_amount")
           .gte("created_at", firstDayOfMonth.toISOString())
-          .eq("status", "paid");
+          .eq("status", "completed");
 
         newMetrics.monthRevenue =
-          monthPaid?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+          monthCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
 
         // Top produtos
         const { data: topProductsData } = await supabase
@@ -314,7 +321,7 @@ export function DashboardMetrics() {
           label: "Taxa de conversão",
           value: `${metrics.conversionRate?.toFixed(1) || 0}%`,
           plan: "pro",
-          description: "Pedidos pagos / total de pedidos",
+          description: "Pedidos concluídos / total de pedidos",
         },
         {
           label: "Pedidos cancelados",
@@ -371,13 +378,13 @@ export function DashboardMetrics() {
       id: "pending",
       title: "Pedidos pendentes",
       value: isLoading ? "..." : metrics.pendingOrders.toString(),
-      change: "Em preparo",
+      change: "Aguardando aceite",
       trend: "neutral",
       icon: Clock,
       plan: "basic",
       detailedMetrics: [
         {
-          label: "Aguardando preparo",
+          label: "Aguardando aceite",
           value: metrics.pendingOrders,
           plan: "basic",
           description: "Pedidos com status 'pending'",
@@ -386,7 +393,7 @@ export function DashboardMetrics() {
           label: "Taxa de conversão",
           value: `${metrics.conversionRate?.toFixed(1) || 0}%`,
           plan: "pro",
-          description: "Pedidos pagos / total de pedidos",
+          description: "Pedidos concluídos / total de pedidos",
         },
         {
           label: "Pedidos cancelados",

@@ -2,32 +2,60 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { OrderStatusBadge } from "@/components/orders/order-status-badge"
+import { ArrowRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import type { OrderStatus } from "@/lib/types/order"
 
 interface OrderRow {
   id: string
+  customer_name: string | null
   total_amount: number
-  status: "pending" | "paid" | "cancelled"
+  status: OrderStatus
   created_at: string
 }
 
 export function RecentOrders() {
   const supabase = createBrowserSupabaseClient()
+  const router = useRouter()
   const [orders, setOrders] = useState<OrderRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const loadRecentOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("id, total_amount, status, created_at")
-      .order("created_at", { ascending: false })
-      .limit(5)
+    try {
+      setIsLoading(true)
 
-    if (error) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single()
+
+      if (!profile) return
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, customer_name, total_amount, status, created_at")
+        .eq("tenant_id", profile.tenant_id)
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      if (error) {
+        console.error("Erro ao carregar pedidos recentes:", error)
+        return
+      }
+
+      setOrders(data ?? [])
+    } catch (error) {
       console.error("Erro ao carregar pedidos recentes:", error)
-      return
+    } finally {
+      setIsLoading(false)
     }
-
-    setOrders(data ?? [])
   }, [supabase])
 
   useEffect(() => {
@@ -35,11 +63,10 @@ export function RecentOrders() {
 
     const channel = supabase
       .channel("recent-orders")
-
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "orders",
         },
@@ -47,12 +74,7 @@ export function RecentOrders() {
           loadRecentOrders()
         }
       )
-
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log("✅ Realtime RecentOrders conectado")
-        }
-      })
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
@@ -65,46 +87,39 @@ export function RecentOrders() {
       currency: "BRL",
     }).format(value)
 
-  const formatDate = (date: string) =>
-    new Date(date).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-
-  const getStatusBadge = (status: OrderRow["status"]) => {
-    const styles = {
-      pending: "bg-yellow-100 text-yellow-800",
-      paid: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
+  const formatDate = (date: string) => {
+    try {
+      return new Date(date).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch {
+      return "Data inválida"
     }
-
-    const labels = {
-      pending: "Pendente",
-      paid: "Pago",
-      cancelled: "Cancelado",
-    }
-
-    return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-medium ${
-          styles[status]
-        }`}
-      >
-        {labels[status]}
-      </span>
-    )
   }
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Últimos Pedidos</CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push("/dashboard/orders")}
+        >
+          Ver todos
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       </CardHeader>
 
       <CardContent>
-        {orders.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Carregando...
+          </div>
+        ) : orders.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             Nenhum pedido ainda
           </div>
@@ -113,17 +128,24 @@ export function RecentOrders() {
             {orders.map((order) => (
               <div
                 key={order.id}
-                className="flex items-center justify-between p-3 rounded-lg border"
+                className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
+                onClick={() => router.push(`/dashboard/orders/${order.id}`)}
               >
-                <div>
-                  <p className="font-medium">
-                    {formatCurrency(order.total_amount)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(order.created_at)}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-medium truncate">
+                      {order.customer_name || "Cliente não identificado"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">
+                      {formatCurrency(order.total_amount)}
+                    </span>
+                    <span>•</span>
+                    <span>{formatDate(order.created_at)}</span>
+                  </div>
                 </div>
-                {getStatusBadge(order.status)}
+                <OrderStatusBadge status={order.status} />
               </div>
             ))}
           </div>

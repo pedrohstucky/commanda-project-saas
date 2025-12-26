@@ -1,99 +1,124 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import type {
-    SubscriptionPlan,
-    TenantSubscription,
-    SubscriptionPlanData
-} from '@/lib/types/subscription'
+  SubscriptionPlan,
+  TenantSubscription,
+  SubscriptionPlanData,
+} from "@/lib/types/subscription"
 
 export function useSubscription() {
-    const supabase = createBrowserSupabaseClient()
-    const [subscription, setSubscription] = useState<TenantSubscription | null>(null)
-    const [plans, setPlans] = useState<SubscriptionPlanData[]>([])
-    const [isLoading, setIsLoading] = useState(true)
+  const supabase = createBrowserSupabaseClient()
 
-    const loadSubscription = useCallback(async () => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
+  const [subscription, setSubscription] =
+    useState<TenantSubscription | null>(null)
+  const [plans, setPlans] = useState<SubscriptionPlanData[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-            if (!user) {
-                setIsLoading(false)
-                return
-            }
+  const loadSubscription = useCallback(async () => {
+    setIsLoading(true)
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('tenant_id')
-                .eq('id', user.id)
-                .single()
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-            if (profile) {
-                const { data, error } = await supabase
-                    .from('tenant_subscriptions')
-                    .select('*')
-                    .eq('tenant_id', profile.tenant_id)
-                    .single()
-                
-                if (error) {
-                    console.log('Erro ao carregar assinatura:', error)
-                } else {
-                    setSubscription(data as TenantSubscription)
-                }
-            }
-        } catch (error) {
-            console.error('Erro ao carregar assinatura', error)
-        } finally {
-            setIsLoading(false)
-        }
-    }, [supabase])
+      if (!user) {
+        setSubscription(null)
+        return
+      }
 
-    const loadPlans = useCallback(async () => {
-        try {
-            const { data, error } = await supabase
-                .from('subscription_plans')
-                .select('*')
-                .eq('is_active', true)
-                .order('price_monthly', { ascending: true })
-            
-            if (error) {
-                console.error('Erro ao carregar planos:', error)
-            } else {
-                setPlans(data as SubscriptionPlanData[])
-            }
-        } catch (error) {
-            console.error('Erro ao carregar planos:', error)
-        }
-    }, [supabase])
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single()
 
-    const hasAccess = useCallback((requiredPlan: SubscriptionPlan): boolean => {
-        if (!subscription || subscription.is_expired) return false
+      if (profileError || !profile?.tenant_id) {
+        console.error("Erro ao carregar profile:", profileError)
+        setSubscription(null)
+        return
+      }
 
-        const planHierarchy: Record<SubscriptionPlan, number> = {
-            trial: 1,
-            basic: 1,
-            pro: 2,
-            premium: 3
-        }
+      const { data, error } = await supabase
+        .from("tenant_subscriptions")
+        .select("*")
+        .eq("tenant_id", profile.tenant_id)
+        .single()
 
-        return planHierarchy[subscription.plan] >= planHierarchy[requiredPlan]
-    }, [subscription])
+      if (error) {
+        console.error("Erro ao carregar assinatura:", error)
+        setSubscription(null)
+        return
+      }
 
-    useEffect(() => {
-        loadSubscription()
-        loadPlans()
-    }, [loadSubscription, loadPlans])
-
-    return {
-        subscription,
-        plans,
-        isLoading,
-        hasAccess,
-        isTrialExpired: subscription?.is_expired || false,
-        daysRemaining: subscription?.days_remaining || 0,
-        plan: subscription?.plan || 'trial',
-        refreshSubscription: loadSubscription,
-        refreshPlans: loadPlans    
+      setSubscription(data as TenantSubscription)
+    } catch (error) {
+      console.error("Erro inesperado ao carregar assinatura:", error)
+      setSubscription(null)
+    } finally {
+      setIsLoading(false)
     }
+  }, [supabase])
+
+  const loadPlans = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("subscription_plans")
+        .select("*")
+        .eq("is_active", true)
+        .order("price_monthly", { ascending: true })
+
+      if (error) {
+        console.error("Erro ao carregar planos:", error)
+        return
+      }
+
+      setPlans(data as SubscriptionPlanData[])
+    } catch (error) {
+      console.error("Erro inesperado ao carregar planos:", error)
+    }
+  }, [supabase])
+
+  const hasAccess = useCallback(
+    (requiredPlan: SubscriptionPlan): boolean => {
+      if (!subscription) return false
+      if (subscription.status !== "active") return false
+
+      const planHierarchy: Record<SubscriptionPlan, number> = {
+        trial: 1,
+        basic: 1,
+        pro: 2,
+        premium: 3,
+      }
+
+      return (
+        planHierarchy[subscription.plan] >=
+        planHierarchy[requiredPlan]
+      )
+    },
+    [subscription]
+  )
+
+  useEffect(() => {
+    loadSubscription()
+    loadPlans()
+  }, [loadSubscription, loadPlans])
+
+  return {
+    subscription,
+    plans,
+    isLoading,
+    hasAccess,
+
+    // helpers
+    isTrialExpired: subscription?.status === "expired",
+    daysRemaining: subscription?.days_remaining ?? 0,
+    plan: subscription?.plan ?? "trial",
+
+    // actions
+    refreshSubscription: loadSubscription,
+    refreshPlans: loadPlans,
+  }
 }
