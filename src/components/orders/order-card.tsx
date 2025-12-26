@@ -1,45 +1,33 @@
-"use client";
+"use client"
 
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { OrderStatusBadge } from "./order-status-badge";
-import {
-  Phone,
-  User,
-  ShoppingBag,
-  Calendar,
-  MessageSquare,
-  MapPin,
-  Package,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import type { Order } from "@/lib/types/order";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { OrderStatusBadge } from "./order-status-badge"
+import { 
+  MapPin, 
+  Phone, 
+  Clock, 
+  Package, 
+  Check, 
+  X, 
+  CheckCircle,
+  Loader2,
+  ShoppingBag
+} from "lucide-react"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import type { Order } from "@/lib/types/order"
 
 interface OrderCardProps {
-  order: Order;
-  onAccept?: (orderId: string) => void;
-  onReject?: (orderId: string) => void;
-  onComplete?: (orderId: string) => void;
-  onClick?: (orderId: string) => void;
-  isLoading?: boolean;
+  order: Order
+  onAccept?: (orderId: string) => void
+  onReject?: (orderId: string) => void
+  onComplete?: (orderId: string) => void
+  onClick?: (orderId: string) => void
+  isLoading?: boolean
 }
 
-/**
- * Card de pedido para listagem
- *
- * Mostra informações essenciais e botões de ação
- * Botões aparecem baseado no status atual:
- * - pending: [Aceitar] [Recusar]
- * - preparing: [Confirmar Entrega]
- * - completed/cancelled: Apenas visualização
- */
 export function OrderCard({
   order,
   onAccept,
@@ -48,179 +36,165 @@ export function OrderCard({
   onClick,
   isLoading = false,
 }: OrderCardProps) {
-  /**
-   * Formata valor monetário em Real brasileiro
-   */
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(value);
-  };
-
-  /**
-   * Calcula tempo relativo (ex: "há 5 minutos")
-   */
-  const getRelativeTime = (date: string) => {
-    try {
-      return formatDistanceToNow(new Date(date), {
-        addSuffix: true,
-        locale: ptBR,
-      });
-    } catch {
-      return "Data inválida";
-    }
-  };
-
-  /**
-   * Conta total de itens no pedido
-   */
-  const getTotalItems = () => {
-    if (!order.order_items || order.order_items.length === 0) return 0;
-    return order.order_items.reduce((sum, item) => sum + item.quantity, 0);
-  };
+    }).format(value)
+  }
 
   return (
-    <Card
-      className={`
-        hover:shadow-lg transition-shadow cursor-pointer
-        ${isLoading ? "opacity-50 pointer-events-none" : ""}
-      `}
+    <Card 
+      className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
       onClick={() => onClick?.(order.id)}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            {/* Nome do cliente ou "Cliente não identificado" */}
-            <div className="flex items-center gap-2 mb-2">
-              <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-semibold truncate">
-                {order.customer_name || "Cliente não identificado"}
-              </h3>
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {order.customer_name || "Cliente sem nome"}
+            </p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              {format(new Date(order.created_at), "dd/MM/yyyy 'às' HH:mm", {
+                locale: ptBR,
+              })}
             </div>
-
-            {/* Tipo de entrega */}
-            <div className="flex items-center gap-2 mb-2">
-              {order.delivery_type === "delivery" ? (
-                <Badge variant="outline" className="gap-1.5">
-                  <MapPin className="h-3 w-3" />
-                  Entrega
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1.5">
-                  <Package className="h-3 w-3" />
-                  Retirada
-                </Badge>
-              )}
-            </div>
-
-            {/* Telefone do cliente */}
-            {order.customer_phone && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>{order.customer_phone}</span>
-              </div>
-            )}
           </div>
-
-          {/* Badge de status */}
           <OrderStatusBadge status={order.status} />
         </div>
       </CardHeader>
 
-      <CardContent className="pb-3 space-y-2">
-        {/* Informações do pedido */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <ShoppingBag className="h-4 w-4" />
-            <span>
-              {getTotalItems()} {getTotalItems() === 1 ? "item" : "itens"}
-            </span>
-          </div>
-          <span className="font-bold text-lg">
-            {formatCurrency(order.total_amount)}
-          </span>
-        </div>
-
-        {/* Endereço (apenas se for entrega) */}
-        {order.delivery_type === "delivery" && order.delivery_address && (
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{order.delivery_address}</span>
+      <CardContent className="space-y-3 pb-3">
+        {/* Telefone */}
+        {order.customer_phone && (
+          <div className="flex items-center gap-2 text-sm">
+            <Phone className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">{order.customer_phone}</span>
           </div>
         )}
 
-        {/* Se for retirada, mostrar aviso */}
-        {order.delivery_type === "pickup" && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Package className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="italic">Cliente retirará no local</span>
-          </div>
-        )}
-
-        {/* Data/hora do pedido */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" />
-          <span>{getRelativeTime(order.created_at)}</span>
-        </div>
-
-        {/* Observações do cliente */}
-        {order.notes && (
-          <div className="flex items-start gap-2 text-sm bg-muted/50 p-2 rounded">
-            <MessageSquare className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-muted-foreground" />
-            <p className="text-muted-foreground line-clamp-2">{order.notes}</p>
-          </div>
-        )}
-      </CardContent>
-
-      {/* Botões de ação baseados no status */}
-      {(order.status === "pending" || order.status === "preparing") && (
-        <CardFooter className="pt-3 gap-2">
-          {order.status === "pending" && (
+        {/* Endereço ou Retirada */}
+        <div className="flex items-start gap-2 text-sm">
+          {order.delivery_type === "delivery" ? (
             <>
-              <Button
-                variant="default"
-                size="sm"
-                className="flex-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAccept?.(order.id);
-                }}
-                disabled={isLoading}
-              >
-                Aceitar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReject?.(order.id);
-                }}
-                disabled={isLoading}
-              >
-                Recusar
-              </Button>
+              <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <span className="text-muted-foreground line-clamp-2">
+                {order.delivery_address || "Endereço não informado"}
+              </span>
+            </>
+          ) : (
+            <>
+              <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground">Retirada no local</span>
             </>
           )}
+        </div>
 
-          {order.status === "preparing" && (
+        {/* Itens do pedido */}
+        {order.order_items && order.order_items.length > 0 && (
+          <div className="pt-2 border-t space-y-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <ShoppingBag className="h-3 w-3" />
+              <span>Itens ({order.order_items.length})</span>
+            </div>
+            <div className="space-y-0.5">
+              {order.order_items.slice(0, 3).map((item) => (
+                <div key={item.id} className="text-sm flex items-start justify-between gap-2">
+                  <span className="flex-1 line-clamp-1">
+                    {item.quantity}x {item.product_name}
+                    {item.variation_name && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({item.variation_name})
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatCurrency(item.subtotal)}
+                  </span>
+                </div>
+              ))}
+              {order.order_items.length > 3 && (
+                <p className="text-xs text-muted-foreground">
+                  + {order.order_items.length - 3} item(ns)
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Total */}
+        <div className="pt-2 border-t">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Total</span>
+            <span className="text-lg font-bold text-primary">
+              {formatCurrency(order.total_amount)}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+
+      <CardFooter className="p-4 pt-0 flex flex-wrap gap-2">
+        {order.status === "pending" && (
+          <>
             <Button
               variant="default"
               size="sm"
-              className="w-full"
+              className="flex-1 min-w-[120px]"
               onClick={(e) => {
-                e.stopPropagation();
-                onComplete?.(order.id);
+                e.stopPropagation()
+                onAccept?.(order.id)
               }}
               disabled={isLoading}
             >
-              Confirmar Entrega
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Check className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Aceitar</span>
+                </>
+              )}
             </Button>
-          )}
-        </CardFooter>
-      )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 min-w-[120px]"
+              onClick={(e) => {
+                e.stopPropagation()
+                onReject?.(order.id)
+              }}
+              disabled={isLoading}
+            >
+              <X className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Recusar</span>
+            </Button>
+          </>
+        )}
+
+        {order.status === "preparing" && (
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full"
+            onClick={(e) => {
+              e.stopPropagation()
+              onComplete?.(order.id)
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Marcar como Concluído</span>
+                <span className="sm:hidden">Concluir</span>
+              </>
+            )}
+          </Button>
+        )}
+      </CardFooter>
     </Card>
-  );
+  )
 }

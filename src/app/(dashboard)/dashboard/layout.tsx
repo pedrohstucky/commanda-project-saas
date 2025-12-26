@@ -1,95 +1,34 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
-import { Toaster } from "sonner"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
-
-  const [isLoading, setIsLoading] = useState(true)
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-
-  // =====================================================
-  // CHECK AUTH + PROFILE + TENANT
-  // =====================================================
-  const checkUser = useCallback(async () => {
-    try {
-      // 1. Verificar sessão
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError || !session) {
-        router.replace("/login")
-        return
-      }
-
-      // 2. Verificar profile
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", session.user.id)
-        .single()
-
-      if (profileError || !profile?.tenant_id) {
-        console.error("Profile inválido:", profileError)
-        await supabase.auth.signOut()
-        router.replace("/login")
-        return
-      }
-
-      // 3. Tudo OK
-      setIsLoading(false)
-    } catch (error) {
-      console.error("Erro ao verificar usuário:", error)
-      router.replace("/login")
-    }
-  }, [router, supabase])
-
-  // =====================================================
-  // EFFECT
-  // =====================================================
-  useEffect(() => {
-    checkUser()
-  }, [checkUser])
-
-  // =====================================================
-  // LOADING
-  // =====================================================
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
-      </div>
-    )
-  }
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-background">
+      {/* Sidebar */}
       <DashboardSidebar
-        isMobileOpen={isMobileSidebarOpen}
-        setIsMobileOpen={setIsMobileSidebarOpen}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
+      {/* Main content */}
       <div className="lg:pl-64">
-        <DashboardHeader
-          onMenuClick={() => setIsMobileSidebarOpen(true)}
-        />
-        <main className="p-4 sm:p-6">{children}</main>
-      </div>
+        {/* Header */}
+        <DashboardHeader onMenuClick={() => setIsMobileOpen(true)} />
 
-      {/* Toaster do Sonner - notificações toast */}
-      <Toaster position="top-right" richColors />
+        {/* Page content */}
+        <main className="p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

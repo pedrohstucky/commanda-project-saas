@@ -97,23 +97,25 @@ export default function OrderDetailsPage() {
         .from("orders")
         .select(
           `
-          *,
-          order_items (
+        *,
+        order_items (
+          id,
+          quantity,
+          product_price,
+          product_id,
+          product_name,
+          variation_id,
+          variation_name,
+          subtotal,
+          products (
             id,
-            quantity,
-            product_price,
-            product_id,
-            product_name,
-            subtotal,
-            products (
-              id,
-              name,
-              description,
-              image_url,
-              category
-            )
+            name,
+            description,
+            image_url,
+            category_id
           )
-        `
+        )
+      `
         )
         .eq("id", orderId)
         .eq("tenant_id", profile.tenant_id)
@@ -127,6 +129,10 @@ export default function OrderDetailsPage() {
         router.push("/dashboard/orders");
         return;
       }
+
+      // ← ADICIONAR LOGS PARA DEBUG
+      console.log("📦 Pedido carregado:", data);
+      console.log("📦 Order items:", data?.order_items);
 
       setOrder(data as OrderWithItems);
     } catch (error) {

@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Breakpoints customizados */
+@custom-media --xs (min-width: 475px);
+@custom-media --sm (min-width: 640px);
+@custom-media --md (min-width: 768px);
+@custom-media --lg (min-width: 1024px);
+@custom-media --xl (min-width: 1280px);
+@custom-media --2xl (min-width: 1536px);
+
+
 @custom-variant dark (&:is(.dark *));
 
 /* New Comanda theme - neutral palette with muted red accent */
@@ -165,4 +174,54 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Utilities responsivas customizadas */
+@layer utilities {
+  /* Ocultar em mobile, mostrar em sm+ */
+  .hide-mobile {
+    @media (max-width: 639px) {
+      display: none;
+    }
+  }
+
+  /* Ocultar em desktop, mostrar apenas mobile */
+  .show-mobile-only {
+    @media (min-width: 640px) {
+      display: none;
+    }
+  }
+
+  /* Texto truncado com ... */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Animações */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }

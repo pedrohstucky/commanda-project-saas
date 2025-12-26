@@ -1,18 +1,39 @@
-import { WhatsAppStatusBanner } from "@/components/whatsapp-status-banner"
-import { SubscriptionAlertBanner } from "@/components/subscription-alert-banner"
+"use client"
+
+import { useEffect, useState } from "react"
 import { DashboardMetrics } from "@/components/dashboard/dashboard-metrics"
 import { RecentOrders } from "@/components/dashboard/recent-orders"
+import { Loader2 } from "lucide-react"
 
 export default function DashboardPage() {
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    setTimeout(() => setIsLoading(false), 500)
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <SubscriptionAlertBanner />
-      <WhatsAppStatusBanner />
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral do seu restaurante</p>
+        <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Visão geral do seu restaurante
+        </p>
       </div>
+
+      {/* Métricas */}
       <DashboardMetrics />
+
+      {/* Pedidos Recentes */}
       <RecentOrders />
     </div>
   )

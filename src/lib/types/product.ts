@@ -41,3 +41,24 @@ export interface Category {
     image_url?: string
     is_available: boolean
   }
+
+  export interface ProductVariation {
+    id: string
+    product_id: string
+    name: string
+    price_modifier: number
+    display_order: number
+    is_available: boolean
+    created_at: string
+    updated_at: string
+  }
+  
+  export interface ProductWithVariations extends Product {
+    variations?: ProductVariation[]
+  }
+  
+  export interface VariationFormData {
+    name: string
+    price_modifier: number
+    is_available: boolean
+  }

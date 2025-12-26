@@ -291,6 +291,8 @@ export interface Database {
           order_id: string
           product_id: string
           product_name: string
+          variation_id?: string
+          variation_name?: string
           quantity: number
           product_price: number
           subtotal: number
@@ -301,6 +303,8 @@ export interface Database {
           order_id: string
           product_id: string
           product_name?: string
+          variation_id?: string
+          variation_name?: string
           quantity: number
           product_price: number
           subtotal?: number
@@ -311,10 +315,45 @@ export interface Database {
           order_id?: string
           product_id?: string
           product_name?: string
+          variation_id?: string
+          variation_name?: string
           quantity?: number
           product_price?: number
           subtotal?: number
           created_at?: string
+        }
+        Relationships: []
+      }
+      product_variations: {
+        Row: {
+          id: string
+          product_id: string
+          name: string
+          price_modifier: number
+          display_order: number
+          is_available: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          name: string
+          price_modifier?: number
+          display_order?: number
+          is_available?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          name?: string
+          price_modifier?: number
+          display_order?: number
+          is_available?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }

@@ -6,53 +6,49 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { ProductCard } from "@/components/products/product-card"
 import { ProductFilters } from "@/components/products/product-filters"
 import { ProductDialog } from "@/components/products/product-dialog"
+import { ProductVariationsDialog } from "@/components/products/product-variations-dialog"
 import { Button } from "@/components/ui/button"
 import { Plus, Loader2, Package, FolderOpen } from "lucide-react"
 import { toast } from "sonner"
 import type { Product, Category, ProductFilters as ProductFiltersType, ProductFormData } from "@/lib/types/product"
 
-
-
-
-
 export default function ProductsPage() {
   const router = useRouter()
-  const supabase = createBrowserSupabaseClient();
+  const supabase = createBrowserSupabaseClient()
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const [filters, setFilters] = useState<ProductFiltersType>({
     category_id: "all",
     search: "",
     is_available: "all",
-  });
+  })
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
-  /**
-   * Carrega produtos com filtros
-   */
+  const [variationsDialogOpen, setVariationsDialogOpen] = useState(false)
+  const [selectedProductForVariations, setSelectedProductForVariations] = useState<Product | null>(null)
+
   const loadProducts = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setIsLoading(true)
 
       const {
         data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      } = await supabase.auth.getUser()
+      if (!user) return
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user.id)
-        .single();
+        .single()
 
-      if (!profile) return;
+      if (!profile) return
 
-      // Query base
       let query = supabase
         .from("products")
         .select(
@@ -62,77 +58,56 @@ export default function ProductsPage() {
         `
         )
         .eq("tenant_id", profile.tenant_id)
-        .order("name");
+        .order("name")
 
-      // Filtro por categoria
       if (filters.category_id && filters.category_id !== "all") {
-        query = query.eq("category_id", filters.category_id);
+        query = query.eq("category_id", filters.category_id)
       }
 
-      // Filtro por busca
       if (filters.search && filters.search.trim().length > 0) {
-        query = query.ilike("name", `%${filters.search.trim()}%`);
+        query = query.ilike("name", `%${filters.search.trim()}%`)
       }
 
-      // Filtro por disponibilidade
       if (
         filters.is_available !== "all" &&
         filters.is_available !== undefined
       ) {
-        query = query.eq("is_available", filters.is_available);
+        query = query.eq("is_available", filters.is_available)
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query
 
       if (error) {
-        console.error("Erro ao carregar produtos:", error);
-        toast.error("Erro ao carregar produtos");
-        return;
+        console.error("Erro ao carregar produtos:", error)
+        toast.error("Erro ao carregar produtos")
+        return
       }
 
-      setProducts(data as Product[]);
+      setProducts(data as Product[])
     } catch (error) {
-      console.error("Erro ao carregar produtos:", error);
+      console.error("Erro ao carregar produtos:", error)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, [supabase, filters]);
+  }, [supabase, filters])
 
-  /**
-   * Salva produto (criar ou editar)
-   */
-  /**
-   * Salva produto (criar ou editar)
-   */
   const handleSave = useCallback(
     async (data: ProductFormData) => {
       try {
         const {
           data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          console.error("❌ Usuário não encontrado");
-          return;
-        }
+        } = await supabase.auth.getUser()
+        if (!user) return
 
         const { data: profile } = await supabase
           .from("profiles")
           .select("tenant_id")
           .eq("id", user.id)
-          .single();
+          .single()
 
-        if (!profile) {
-          console.error("❌ Perfil não encontrado");
-          return;
-        }
-
-        console.log("📝 Modo:", selectedProduct ? "EDITAR" : "CRIAR");
-        console.log("📦 Dados:", data);
+        if (!profile) return
 
         if (selectedProduct) {
-          // Editar
-          console.log("✏️ Editando produto:", selectedProduct.id);
-
           const updateData = {
             name: data.name,
             description: data.description || null,
@@ -140,27 +115,17 @@ export default function ProductsPage() {
             category_id: data.category_id || null,
             is_available: data.is_available,
             updated_at: new Date().toISOString(),
-          };
+          }
 
-          console.log("📤 Update data:", updateData);
-
-          const { data: result, error } = await supabase
+          const { error } = await supabase
             .from("products")
             .update(updateData)
             .eq("id", selectedProduct.id)
-            .select();
 
-          if (error) {
-            console.error("❌ Erro ao atualizar:", error);
-            throw error;
-          }
+          if (error) throw error
 
-          console.log("✅ Produto atualizado:", result);
-          toast.success("Produto atualizado com sucesso!");
+          toast.success("Produto atualizado com sucesso!")
         } else {
-          // Criar
-          console.log("➕ Criando novo produto");
-
           const insertData = {
             tenant_id: profile.tenant_id,
             name: data.name,
@@ -168,129 +133,115 @@ export default function ProductsPage() {
             price: data.price,
             category_id: data.category_id || null,
             is_available: data.is_available,
-          };
-
-          console.log("📤 Insert data:", insertData);
-
-          const { data: result, error } = await supabase
-            .from("products")
-            .insert(insertData)
-            .select();
-
-          if (error) {
-            console.error("❌ Erro ao criar:", error);
-            throw error;
           }
 
-          console.log("✅ Produto criado:", result);
-          toast.success("Produto criado com sucesso!");
+          const { error } = await supabase
+            .from("products")
+            .insert(insertData)
+
+          if (error) throw error
+
+          toast.success("Produto criado com sucesso!")
         }
 
-        loadProducts();
-        setSelectedProduct(null);
+        loadProducts()
+        setSelectedProduct(null)
       } catch (error) {
-        console.error("❌ Erro ao salvar produto:", error);
+        console.error("❌ Erro ao salvar produto:", error)
         toast.error("Erro ao salvar produto", {
           description:
             error instanceof Error ? error.message : "Erro desconhecido",
-        });
-        throw error;
+        })
+        throw error
       }
     },
     [supabase, selectedProduct, loadProducts]
-  );
+  )
 
-  /**
-   * Carrega categorias
-   */
   const loadCategories = useCallback(async () => {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      } = await supabase.auth.getUser()
+      if (!user) return
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user.id)
-        .single();
+        .single()
 
-      if (!profile) return;
+      if (!profile) return
 
       const { data, error } = await supabase
         .from("categories")
         .select("*")
         .eq("tenant_id", profile.tenant_id)
         .eq("is_active", true)
-        .order("display_order");
+        .order("display_order")
 
       if (error) {
-        console.error("Erro ao carregar categorias:", error);
-        return;
+        console.error("Erro ao carregar categorias:", error)
+        return
       }
 
-      setCategories(data);
+      setCategories(data)
     } catch (error) {
-      console.error("Erro ao carregar categorias:", error);
+      console.error("Erro ao carregar categorias:", error)
     }
-  }, [supabase]);
+  }, [supabase])
 
-  /**
-   * Deleta um produto
-   */
   const handleDelete = useCallback(
     async (productId: string) => {
       if (!confirm("Tem certeza que deseja excluir este produto?")) {
-        return;
+        return
       }
 
       try {
         const { error } = await supabase
           .from("products")
           .delete()
-          .eq("id", productId);
+          .eq("id", productId)
 
-        if (error) throw error;
+        if (error) throw error
 
-        toast.success("Produto excluído com sucesso!");
-        loadProducts();
+        toast.success("Produto excluído com sucesso!")
+        loadProducts()
       } catch (error) {
-        console.error("Erro ao excluir produto:", error);
-        toast.error("Erro ao excluir produto");
+        console.error("Erro ao excluir produto:", error)
+        toast.error("Erro ao excluir produto")
       }
     },
     [supabase, loadProducts]
-  );
+  )
 
-  /**
-   * Abre modal de edição (placeholder)
-   */
   const handleEdit = useCallback((product: Product) => {
-    setSelectedProduct(product);
-    setIsDialogOpen(true);
-  }, []);
+    setSelectedProduct(product)
+    setIsDialogOpen(true)
+  }, [])
 
-  /**
-   * Abre modal de criação (placeholder)
-   */
   const handleCreate = useCallback(() => {
-    setSelectedProduct(null);
-    setIsDialogOpen(true);
-  }, []);
+    setSelectedProduct(null)
+    setIsDialogOpen(true)
+  }, [])
+
+  const handleManageVariations = useCallback((product: Product) => {
+    setSelectedProductForVariations(product)
+    setVariationsDialogOpen(true)
+  }, [])
 
   useEffect(() => {
-    loadProducts();
-    loadCategories();
-  }, [loadProducts, loadCategories]);
+    loadProducts()
+    loadCategories()
+  }, [loadProducts, loadCategories])
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Cardápio</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Cardápio</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Gerencie os produtos do seu restaurante
           </p>
         </div>
@@ -298,13 +249,13 @@ export default function ProductsPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            className="gap-2"
+            className="gap-2 flex-1 sm:flex-none"
             onClick={() => router.push("/dashboard/products/categories")}
           >
             <FolderOpen className="h-4 w-4" />
-            Categorias
+            <span className="hidden sm:inline">Categorias</span>
           </Button>
-          <Button className="gap-2" onClick={handleCreate}>
+          <Button className="gap-2 flex-1 sm:flex-none" onClick={handleCreate}>
             <Plus className="h-4 w-4" />
             Novo Produto
           </Button>
@@ -342,26 +293,34 @@ export default function ProductsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onManageVariations={handleManageVariations}
             />
           ))}
-
-          {/* Dialog de criar/editar */}
-          <ProductDialog
-            open={isDialogOpen}
-            onOpenChange={setIsDialogOpen}
-            product={selectedProduct}
-            categories={categories}
-            onSave={handleSave}
-          />
         </div>
       )}
+
+      {/* Dialog de criar/editar */}
+      <ProductDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        product={selectedProduct}
+        categories={categories}
+        onSave={handleSave}
+      />
+
+      {/* Dialog de variações */}
+      <ProductVariationsDialog
+        open={variationsDialogOpen}
+        onOpenChange={setVariationsDialogOpen}
+        product={selectedProductForVariations}
+      />
     </div>
-  );
+  )
 }

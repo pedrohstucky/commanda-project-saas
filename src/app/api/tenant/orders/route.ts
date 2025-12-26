@@ -16,6 +16,7 @@ interface CreateOrderRequest {
   items: Array<{
     product_id: string
     quantity: number
+    variation_id?: string
   }>
 }
 
@@ -92,7 +93,7 @@ export async function POST(
       )
     }
 
-    // 4. Buscar produtos para calcular total
+    // 4. Buscar produtos
     const productIds = body.items.map(item => item.product_id)
     
     const { data: products, error: productsError } = await supabaseAdmin
@@ -113,7 +114,28 @@ export async function POST(
       )
     }
 
-    console.log(`✅ ${products.length} produto(s) encontrado(s)`)
+    // Buscar variações separadamente (se houver)
+    const variationIds = body.items
+      .filter(item => item.variation_id)
+      .map(item => item.variation_id!)
+
+    let variations: any[] = []
+
+    if (variationIds.length > 0) {
+      const { data: variationsData, error: variationsError } = await supabaseAdmin
+        .from('product_variations')
+        .select('id, product_id, name, price_modifier, is_available')
+        .in('id', variationIds)
+
+      if (variationsError) {
+        console.error('❌ Erro ao buscar variações:', variationsError)
+        throw variationsError
+      }
+
+      variations = variationsData || []
+    }
+
+    console.log(`✅ ${products.length} produto(s) e ${variations.length} variação(ões) encontrados`)
 
     // Verificar se todos estão disponíveis
     const unavailable = products.filter(p => !p.is_available)
@@ -127,27 +149,78 @@ export async function POST(
       )
     }
 
-    // 5. Calcular total
+    // 5. Calcular total COM VARIAÇÕES
     const productsMap = new Map(products.map(p => [p.id, p]))
+    const variationsMap = new Map(variations.map(v => [v.id, v]))
     
     let totalAmount = 0
     const orderItems: Array<{
       product_id: string
       quantity: number
       product_price: number
+      variation_id?: string
     }> = []
 
     for (const item of body.items) {
       const product = productsMap.get(item.product_id)
-      if (!product) continue
+      if (!product) {
+        return NextResponse.json(
+          { success: false, error: `Produto ${item.product_id} não encontrado` },
+          { status: 400 }
+        )
+      }
 
-      const subtotal = product.price * item.quantity
+      let finalPrice = product.price
+      let variationId: string | undefined = undefined
+
+      // Se tem variação, buscar e aplicar modificador
+      if (item.variation_id) {
+        const variation = variationsMap.get(item.variation_id)
+
+        if (!variation) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `Variação ${item.variation_id} não encontrada` 
+            },
+            { status: 400 }
+          )
+        }
+
+        if (variation.product_id !== product.id) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `Variação não pertence ao produto ${product.name}` 
+            },
+            { status: 400 }
+          )
+        }
+
+        if (!variation.is_available) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `Variação "${variation.name}" está indisponível` 
+            },
+            { status: 400 }
+          )
+        }
+
+        finalPrice += variation.price_modifier
+        variationId = variation.id
+
+        console.log(`📏 Variação aplicada: ${product.name} ${variation.name} (${variation.price_modifier >= 0 ? '+' : ''}R$ ${variation.price_modifier.toFixed(2)})`)
+      }
+
+      const subtotal = finalPrice * item.quantity
       totalAmount += subtotal
 
       orderItems.push({
         product_id: item.product_id,
-        product_price: product.price,
+        product_price: finalPrice,
         quantity: item.quantity,
+        variation_id: variationId,
       })
     }
 
@@ -193,12 +266,13 @@ export async function POST(
 
     console.log('✅ Pedido criado no banco:', JSON.stringify(order, null, 2))
 
-    // 8. Criar itens do pedido (triggers preencherão product_name e subtotal)
+    // 8. Criar itens do pedido COM VARIAÇÕES
     const itemsToInsert = orderItems.map(item => ({
       order_id: order.id,
       product_id: item.product_id,
       product_price: item.product_price,
       quantity: item.quantity,
+      variation_id: item.variation_id ?? undefined,
     }))
 
     console.log(`📦 Inserindo ${itemsToInsert.length} item(ns)...`)
@@ -271,7 +345,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // 3. Montar query
+    // 3. Montar query COM VARIAÇÕES
     let query = supabaseAdmin
       .from('orders')
       .select(`
@@ -291,6 +365,8 @@ export async function GET(request: NextRequest) {
           id,
           product_id,
           product_name,
+          variation_id,
+          variation_name,
           quantity,
           product_price,
           subtotal

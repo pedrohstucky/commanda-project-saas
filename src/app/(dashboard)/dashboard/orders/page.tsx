@@ -22,17 +22,6 @@ import type {
   OrderFilters as OrderFiltersType,
 } from "@/lib/types/order";
 
-/**
- * Página de listagem de pedidos
- *
- * Features:
- * - Listagem com filtros
- * - Atualização em tempo real (Realtime)
- * - Ações rápidas (aceitar, recusar, completar)
- * - Contadores por status
- * - Busca por nome/telefone
- * - Paginação
- */
 export default function OrdersPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
@@ -60,9 +49,104 @@ export default function OrdersPage() {
     cancelled: 0,
   });
 
-  /**
-   * Carrega contadores de pedidos por status
-   */
+  const loadOrders = useCallback(async () => {
+    try {
+      setIsLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile) return;
+
+      const from = (pagination.page - 1) * pagination.pageSize;
+      const to = from + pagination.pageSize - 1;
+
+      let query = supabase
+        .from("orders")
+        .select(
+          `
+          *,
+          order_items (
+            id,
+            quantity,
+            product_price,
+            product_id,
+            product_name,
+            variation_id,
+            variation_name,
+            subtotal,
+            products (
+              id,
+              name,
+              image_url
+            )
+          )
+        `,
+          { count: "exact" }
+        )
+        .eq("tenant_id", profile.tenant_id)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (filters.status && filters.status !== "all") {
+        query = query.eq("status", filters.status);
+      }
+
+      if (filters.search && filters.search.trim().length > 0) {
+        const searchTerm = `%${filters.search.trim()}%`;
+        query = query.or(
+          `customer_name.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`
+        );
+      }
+
+      if (filters.dateFrom) {
+        query = query.gte("created_at", filters.dateFrom);
+      }
+
+      if (filters.dateTo) {
+        query = query.lte("created_at", filters.dateTo);
+      }
+
+      if (filters.minAmount !== undefined) {
+        query = query.gte("total_amount", filters.minAmount);
+      }
+
+      if (filters.maxAmount !== undefined) {
+        query = query.lte("total_amount", filters.maxAmount);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error("Erro ao carregar pedidos:", error);
+        toast.error("Erro ao carregar pedidos", {
+          description: error.message,
+        });
+        return;
+      }
+
+      setOrders(data as Order[]);
+      setPagination((prev) => ({
+        ...prev,
+        total: count || 0,
+      }));
+
+      await loadOrderCounts(profile.tenant_id);
+    } catch (error) {
+      console.error("Erro ao carregar pedidos:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, filters, pagination.page, pagination.pageSize]);
+
   const loadOrderCounts = useCallback(
     async (tenantId: string) => {
       try {
@@ -88,121 +172,7 @@ export default function OrdersPage() {
     },
     [supabase]
   );
-  /**
-   * Carrega pedidos do banco de dados com paginação
-   * Aplica filtros de status e busca
-   */
-  const loadOrders = useCallback(async () => {
-    try {
-      setIsLoading(true);
 
-      // Buscar tenant_id do usuário logado
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", user.id)
-        .single();
-
-      if (!profile) return;
-
-      // Calcular range para paginação
-      const from = (pagination.page - 1) * pagination.pageSize;
-      const to = from + pagination.pageSize - 1;
-
-      // Query base com count
-      let query = supabase
-        .from("orders")
-        .select(
-          `
-          *,
-          order_items (
-            id,
-            quantity,
-            product_price,
-            product_id,
-            products (
-              id,
-              name,
-              image_url
-            )
-          )
-        `,
-          { count: "exact" }
-        )
-        .eq("tenant_id", profile.tenant_id)
-        .order("created_at", { ascending: false })
-        .range(from, to);
-
-      // Filtro por status
-      if (filters.status && filters.status !== "all") {
-        query = query.eq("status", filters.status);
-      }
-
-      // Filtro por busca (nome ou telefone)
-      if (filters.search && filters.search.trim().length > 0) {
-        const searchTerm = `%${filters.search.trim()}%`;
-        query = query.or(
-          `customer_name.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`
-        );
-      }
-
-      // Filtro por data
-      if (filters.dateFrom) {
-        query = query.gte("created_at", filters.dateFrom);
-      }
-
-      if (filters.dateTo) {
-        query = query.lte("created_at", filters.dateTo);
-      }
-
-      // Filtro por valor
-      if (filters.minAmount !== undefined) {
-        query = query.gte("total_amount", filters.minAmount);
-      }
-
-      if (filters.maxAmount !== undefined) {
-        query = query.lte("total_amount", filters.maxAmount);
-      }
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        console.error("Erro ao carregar pedidos:", error);
-        toast.error("Erro ao carregar pedidos", {
-          description: error.message,
-        });
-        return;
-      }
-
-      setOrders(data as Order[]);
-      setPagination((prev) => ({
-        ...prev,
-        total: count || 0,
-      }));
-
-      // Atualizar contadores
-      await loadOrderCounts(profile.tenant_id);
-    } catch (error) {
-      console.error("Erro ao carregar pedidos:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    supabase,
-    filters,
-    pagination.page,
-    pagination.pageSize,
-    loadOrderCounts,
-  ]);
-
-  /**
-   * Aceita um pedido via API
-   */
   const handleAccept = useCallback(
     async (orderId: string) => {
       try {
@@ -236,9 +206,6 @@ export default function OrdersPage() {
     [loadOrders]
   );
 
-  /**
-   * Recusa um pedido via API
-   */
   const handleReject = useCallback(
     async (orderId: string) => {
       try {
@@ -278,9 +245,6 @@ export default function OrdersPage() {
     [loadOrders]
   );
 
-  /**
-   * Completa um pedido via API
-   */
   const handleComplete = useCallback(
     async (orderId: string) => {
       try {
@@ -314,9 +278,6 @@ export default function OrdersPage() {
     [loadOrders]
   );
 
-  /**
-   * Exporta pedidos filtrados para CSV
-   */
   const handleExportCSV = useCallback(() => {
     const today = new Date().toISOString().split("T")[0];
     const filename = `pedidos-${today}.csv`;
@@ -326,27 +287,17 @@ export default function OrdersPage() {
     });
   }, [orders]);
 
-  /**
-   * Exporta pedidos filtrados para PDF
-   */
   const handleExportPDF = useCallback(() => {
     exportToPDF(orders);
   }, [orders]);
 
-  /**
-   * Reset página quando filtros mudam
-   */
   useEffect(() => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   }, [filters]);
 
-  /**
-   * Carrega pedidos inicial e configura Realtime
-   */
   useEffect(() => {
     loadOrders();
 
-    // Realtime - escuta mudanças na tabela orders
     const channel = supabase
       .channel("orders-changes")
       .on(
@@ -366,10 +317,10 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Pedidos</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Pedidos</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Gerencie todos os pedidos do seu restaurante
           </p>
         </div>
@@ -378,7 +329,11 @@ export default function OrdersPage() {
         {orders.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 w-full sm:w-auto"
+              >
                 <Download className="h-4 w-4" />
                 Exportar
               </Button>
@@ -429,7 +384,7 @@ export default function OrdersPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {orders.map((order) => (
               <OrderCard
                 key={order.id}
