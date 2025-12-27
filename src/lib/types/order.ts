@@ -15,6 +15,15 @@
  */
 export type OrderStatus = "pending" | "preparing" | "completed" | "cancelled";
 
+export interface OrderItemExtra {
+  id: string
+  order_item_id: string
+  extra_id: string
+  extra_name: string
+  extra_price: number
+  created_at: string
+}
+
 /**
  * Item individual do pedido
  * Representa um produto com quantidade
@@ -30,6 +39,7 @@ export interface OrderItem {
   product_price: number
   subtotal: number
   created_at: string
+  order_item_extras?: OrderItemExtra[]  // ← ADICIONAR
   products?: {
     id: string
     name: string
@@ -38,6 +48,7 @@ export interface OrderItem {
     category_id?: string | null
   }
 }
+
 
 export interface OrderWithItems extends Order {
   order_items: OrderItem[]

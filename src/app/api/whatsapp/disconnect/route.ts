@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (inngestSecret === process.env.INNGEST_INTERNAL_SECRET && tenantId) {
       // Chamada do Inngest - usar tenantId do body
       finalTenantId = tenantId;
-      console.log("🔧 Chamada do Inngest para tenant:", finalTenantId);
+      logger.debug("🔧 Chamada do Inngest para tenant:", finalTenantId);
     } else {
       // Chamada normal - verificar auth
       const supabase = await createClient();
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Erro ao desconectar WhatsApp:", error);
+    logger.error("Erro ao desconectar WhatsApp:", error);
     return NextResponse.json(
       { error: "Erro ao desconectar WhatsApp" },
       { status: 500 }

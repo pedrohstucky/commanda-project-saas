@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+import { logger } from "@/lib/logger";
 /**
  * POST /api/orders/[id]/complete
  * Completa um pedido (preparing → completed)
@@ -81,7 +82,7 @@ export async function POST(
       throw updateError
     }
 
-    console.log(`✅ Pedido ${orderId} completado por ${user.email}`)
+    logger.debug(`✅ Pedido ${orderId} completado por ${user.email}`)
 
     return NextResponse.json({
       success: true,
@@ -93,7 +94,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error('❌ Erro ao completar pedido:', error)
+    logger.error('❌ Erro ao completar pedido:', error)
     
     return NextResponse.json(
       {

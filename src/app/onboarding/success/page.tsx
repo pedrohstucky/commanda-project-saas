@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 
+import { logger } from "@/lib/logger";
 interface WhatsAppInstance {
   phone_number: string | null
   profile_name: string | null
@@ -34,7 +35,7 @@ export default function WhatsAppSuccessPage() {
         .maybeSingle()
 
       if (error) {
-        console.error("Erro ao carregar instância:", error)
+        logger.error("Erro ao carregar instância:", error)
         return
       }
 
@@ -42,7 +43,7 @@ export default function WhatsAppSuccessPage() {
         setInstance(data)
       }
     } catch (error) {
-      console.error("Erro ao carregar instância:", error)
+      logger.error("Erro ao carregar instância:", error)
     } finally {
       setIsLoading(false)
     }

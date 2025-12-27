@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { DashboardMetrics } from "@/components/dashboard/dashboard-metrics"
 import { RecentOrders } from "@/components/dashboard/recent-orders"
-import { Loader2 } from "lucide-react"
+import { DashboardSkeleton } from "@/components/ui/skeleton-patterns"
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -13,11 +13,7 @@ export default function DashboardPage() {
   }, [])
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   return (

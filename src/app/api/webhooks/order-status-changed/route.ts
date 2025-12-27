@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+import { logger } from "@/lib/logger";
 /**
  * Payload do webhook Supabase
  */
@@ -10,6 +11,7 @@ interface WebhookPayload {
   record: {
     id: string
     tenant_id: string
+    instanceToken: string
     status: 'pending' | 'preparing' | 'completed' | 'cancelled'
     customer_name: string | null
     customer_phone: string | null
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
     const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET
 
     if (!webhookSecret || authHeader !== `Bearer ${webhookSecret}`) {
-      console.error('❌ Webhook não autorizado')
+      logger.error('❌ Webhook não autorizado')
       return NextResponse.json(
         { error: 'Não autorizado' },
         { status: 401 }
@@ -58,17 +60,17 @@ export async function POST(request: NextRequest) {
 
     const { record, old_record } = payload
     
-    console.log(`📢 Status mudou: ${old_record.status} → ${record.status} (Pedido ${record.id})`)
+    logger.debug(`📢 Status mudou: ${old_record.status} → ${record.status} (Pedido ${record.id})`)
 
     // 4. Buscar WhatsApp instance do tenant
     const { data: whatsappInstance } = await supabaseAdmin
       .from('whatsapp_instances')
-      .select('instance_id, status')
+      .select('instance_token, status')
       .eq('tenant_id', record.tenant_id)
       .single()
 
     if (!whatsappInstance || whatsappInstance.status !== 'connected') {
-      console.warn(`⚠️ WhatsApp não conectado para tenant ${record.tenant_id}`)
+      logger.warn(`⚠️ WhatsApp não conectado para tenant ${record.tenant_id}`)
       return NextResponse.json({ 
         ok: true, 
         skipped: 'whatsapp_not_connected' 
@@ -130,7 +132,7 @@ export async function POST(request: NextRequest) {
     const n8nWebhookUrl = process.env.N8N_ORDER_STATUS_WEBHOOK_URL
 
     if (!n8nWebhookUrl) {
-      console.error('❌ N8N_ORDER_STATUS_WEBHOOK_URL não configurada')
+      logger.error('❌ N8N_ORDER_STATUS_WEBHOOK_URL não configurada')
       return NextResponse.json({ 
         ok: true, 
         skipped: 'n8n_not_configured' 
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
 
     const n8nPayload = {
-      instance_id: whatsappInstance.instance_id,
+      instance_token: whatsappInstance.instance_token,
       phone: record.customer_phone,
       message: message,
       order_id: record.id,
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
       tenant_id: record.tenant_id
     }
 
-    console.log(`📤 Enviando para n8n:`, {
+    logger.debug(`📤 Enviando para n8n:`, {
       phone: record.customer_phone,
       status: `${old_record.status} → ${record.status}`
     })
@@ -161,14 +163,14 @@ export async function POST(request: NextRequest) {
     })
 
     if (!n8nResponse.ok) {
-      console.error(`❌ Erro ao enviar para n8n:`, await n8nResponse.text())
+      logger.error(`❌ Erro ao enviar para n8n:`, await n8nResponse.text())
       return NextResponse.json({ 
         ok: false, 
         error: 'n8n_error' 
       }, { status: 500 })
     }
 
-    console.log(`✅ Notificação enviada com sucesso para ${record.customer_phone}`)
+    logger.debug(`✅ Notificação enviada com sucesso para ${record.customer_phone}`)
 
     return NextResponse.json({ 
       ok: true,
@@ -178,7 +180,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ Erro no webhook order-status-changed:', error)
+    logger.error('❌ Erro no webhook order-status-changed:', error)
     
     return NextResponse.json(
       { 

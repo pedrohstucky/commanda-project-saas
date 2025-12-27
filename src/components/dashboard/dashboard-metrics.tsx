@@ -5,9 +5,11 @@ import { ShoppingBag, DollarSign, Clock, TrendingUp } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { MetricCardExpandable } from "./metric-card-expandable";
 import { useSubscription } from "@/hooks/use-subscription";
+import { MetricCardSkeleton } from "../ui/skeleton-patterns";
 import { useRouter } from "next/navigation";
 import type { MetricsData, MetricCard } from "@/lib/types/metrics";
 
+import { logger } from "@/lib/logger";
 /* -------------------------------------------------------------------------- */
 /*                                COMPONENT                                   */
 /* -------------------------------------------------------------------------- */
@@ -94,26 +96,31 @@ export function DashboardMetrics() {
         ]);
 
       // ✅ CORRIGIDO: paid → completed
-      const [{ data: todayCompleted }, { data: yesterdayCompleted }] = await Promise.all([
-        supabase
-          .from("orders")
-          .select("total_amount")
-          .gte("created_at", today.toISOString())
-          .eq("status", "completed"),
+      const [{ data: todayCompleted }, { data: yesterdayCompleted }] =
+        await Promise.all([
+          supabase
+            .from("orders")
+            .select("total_amount")
+            .gte("created_at", today.toISOString())
+            .eq("status", "completed"),
 
-        supabase
-          .from("orders")
-          .select("total_amount")
-          .gte("created_at", yesterday.toISOString())
-          .lt("created_at", today.toISOString())
-          .eq("status", "completed"),
-      ]);
+          supabase
+            .from("orders")
+            .select("total_amount")
+            .gte("created_at", yesterday.toISOString())
+            .lt("created_at", today.toISOString())
+            .eq("status", "completed"),
+        ]);
 
       const todayRevenue =
-        todayCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        todayCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) ||
+        0;
 
       const yesterdayRevenue =
-        yesterdayCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        yesterdayCompleted?.reduce(
+          (sum, o) => sum + Number(o.total_amount),
+          0
+        ) || 0;
 
       const { count: pendingOrders } = await supabase
         .from("orders")
@@ -132,7 +139,10 @@ export function DashboardMetrics() {
         .eq("status", "completed");
 
       const lastWeekRevenue =
-        lastWeekCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+        lastWeekCompleted?.reduce(
+          (sum, o) => sum + Number(o.total_amount),
+          0
+        ) || 0;
 
       const lastWeekAvgTicket =
         lastWeekCompleted && lastWeekCompleted.length > 0
@@ -165,7 +175,8 @@ export function DashboardMetrics() {
           .eq("status", "completed");
 
         const weekRevenue =
-          weekCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+          weekCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) ||
+          0;
 
         const { count: cancelled } = await supabase
           .from("orders")
@@ -175,7 +186,7 @@ export function DashboardMetrics() {
 
         const totalOrders = weekOrders || 0;
         const completedOrders = weekCompleted?.length || 0;
-        
+
         // ✅ CORRIGIDO: Taxa de conversão agora usa "completed"
         const conversionRate =
           totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
@@ -207,7 +218,7 @@ export function DashboardMetrics() {
           today.getMonth(),
           1
         );
-        
+
         // ✅ CORRIGIDO: paid → completed
         const { data: monthCompleted } = await supabase
           .from("orders")
@@ -216,7 +227,8 @@ export function DashboardMetrics() {
           .eq("status", "completed");
 
         newMetrics.monthRevenue =
-          monthCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
+          monthCompleted?.reduce((sum, o) => sum + Number(o.total_amount), 0) ||
+          0;
 
         // Top produtos
         const { data: topProductsData } = await supabase
@@ -254,7 +266,7 @@ export function DashboardMetrics() {
 
       setMetrics(newMetrics);
     } catch (error) {
-      console.error("❌ Erro ao carregar métricas:", error);
+      logger.error("❌ Erro ao carregar métricas:", error);
     } finally {
       setIsLoading(false);
     }
@@ -266,7 +278,7 @@ export function DashboardMetrics() {
 
   useEffect(() => {
     loadMetrics().catch((err) => {
-      console.error("❌ Erro ao carregar métricas iniciais:", err);
+      logger.error("❌ Erro ao carregar métricas iniciais:", err);
     });
 
     const channel = supabase
@@ -276,7 +288,7 @@ export function DashboardMetrics() {
         { event: "*", schema: "public", table: "orders" },
         () => {
           loadMetrics().catch((err) => {
-            console.error("❌ Erro ao recarregar métricas (realtime):", err);
+            logger.error("❌ Erro ao recarregar métricas (realtime):", err);
           });
         }
       )
@@ -422,22 +434,26 @@ export function DashboardMetrics() {
       value: isLoading ? "..." : formatCurrency(metrics.avgTicket),
       change: isLoading
         ? "..."
-        : `${calculatePercentChange(metrics.avgTicket, metrics.lastWeekAvgTicket)} vs semana`,
+        : `${calculatePercentChange(
+            metrics.avgTicket,
+            metrics.lastWeekAvgTicket
+          )} vs semana`,
       trend: metrics.avgTicket >= metrics.lastWeekAvgTicket ? "up" : "down",
       icon: TrendingUp,
       plan: "basic",
       detailedMetrics: [
-        { 
-          label: "Ticket médio da semana", 
-          value: formatCurrency(metrics.lastWeekAvgTicket), 
+        {
+          label: "Ticket médio da semana",
+          value: formatCurrency(metrics.lastWeekAvgTicket),
           plan: "basic",
-          description: "Média dos últimos 7 dias"
+          description: "Média dos últimos 7 dias",
         },
         {
           label: "Ticket médio do mês",
-          value: metrics.monthRevenue && metrics.weekOrders
-            ? formatCurrency(metrics.monthRevenue / (metrics.weekOrders * 4))
-            : formatCurrency(0),
+          value:
+            metrics.monthRevenue && metrics.weekOrders
+              ? formatCurrency(metrics.monthRevenue / (metrics.weekOrders * 4))
+              : formatCurrency(0),
           plan: "pro",
           description: "Média do mês atual",
         },
@@ -460,6 +476,16 @@ export function DashboardMetrics() {
   /* -------------------------------------------------------------------------- */
   /*                                   UI                                       */
   /* -------------------------------------------------------------------------- */
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <MetricCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">

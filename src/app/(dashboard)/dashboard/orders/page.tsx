@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Download, FileText, PackageX } from "lucide-react";
+
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { Download, FileText } from "lucide-react";
 import { exportToCSV, exportToPDF } from "@/lib/utils/export";
+import { logger } from "@/lib/logger";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,13 +18,21 @@ import { Button } from "@/components/ui/button";
 import { OrderCard } from "@/components/orders/order-card";
 import { OrderFilters } from "@/components/orders/order-filters";
 import { OrderPagination } from "@/components/orders/order-pagination";
-import { Loader2, PackageX } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { OrdersGridSkeleton } from "@/components/ui/skeleton-patterns";
 import { toast } from "sonner";
 import type {
   Order,
   OrderFilters as OrderFiltersType,
 } from "@/lib/types/order";
+
+/**
+ * Valida UUID
+ */
+function isValidUUID(id: string): boolean {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -37,7 +49,7 @@ export default function OrdersPage() {
 
   const [pagination, setPagination] = useState({
     page: 1,
-    pageSize: 9,
+    pageSize: 12,
     total: 0,
   });
 
@@ -49,6 +61,9 @@ export default function OrdersPage() {
     cancelled: 0,
   });
 
+  /**
+   * Carrega contadores por status
+   */
   const loadOrderCounts = useCallback(
     async (tenantId: string) => {
       try {
@@ -59,22 +74,23 @@ export default function OrdersPage() {
 
         if (error || !data) return;
 
-        const counts = {
+        setOrderCounts({
           all: data.length,
           pending: data.filter((o) => o.status === "pending").length,
           preparing: data.filter((o) => o.status === "preparing").length,
           completed: data.filter((o) => o.status === "completed").length,
           cancelled: data.filter((o) => o.status === "cancelled").length,
-        };
-
-        setOrderCounts(counts);
+        });
       } catch (error) {
-        console.error("Erro ao carregar contadores:", error);
+        logger.error("Erro ao carregar contadores de pedidos", error);
       }
     },
     [supabase]
   );
 
+  /**
+   * Carrega pedidos
+   */
   const loadOrders = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -82,6 +98,7 @@ export default function OrdersPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (!user) return;
 
       const { data: profile } = await supabase
@@ -90,7 +107,7 @@ export default function OrdersPage() {
         .eq("id", user.id)
         .single();
 
-      if (!profile) return;
+      if (!profile?.tenant_id) return;
 
       const from = (pagination.page - 1) * pagination.pageSize;
       const to = from + pagination.pageSize - 1;
@@ -109,10 +126,11 @@ export default function OrdersPage() {
             variation_id,
             variation_name,
             subtotal,
-            products (
+            order_item_extras (
               id,
-              name,
-              image_url
+              extra_id,
+              extra_name,
+              extra_price
             )
           )
         `,
@@ -122,14 +140,14 @@ export default function OrdersPage() {
         .order("created_at", { ascending: false })
         .range(from, to);
 
-      if (filters.status && filters.status !== "all") {
+      if (filters.status !== "all") {
         query = query.eq("status", filters.status);
       }
 
-      if (filters.search && filters.search.trim().length > 0) {
-        const searchTerm = `%${filters.search.trim()}%`;
+      if (filters.search?.trim()) {
+        const term = `%${filters.search.trim()}%`;
         query = query.or(
-          `customer_name.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`
+          `customer_name.ilike.${term},customer_phone.ilike.${term}`
         );
       }
 
@@ -152,22 +170,19 @@ export default function OrdersPage() {
       const { data, error, count } = await query;
 
       if (error) {
-        console.error("Erro ao carregar pedidos:", error);
+        logger.error("Erro ao carregar pedidos", error);
         toast.error("Erro ao carregar pedidos", {
           description: error.message,
         });
         return;
       }
 
-      setOrders(data as Order[]);
-      setPagination((prev) => ({
-        ...prev,
-        total: count || 0,
-      }));
+      setOrders((data ?? []) as Order[]);
+      setPagination((prev) => ({ ...prev, total: count ?? 0 }));
 
       await loadOrderCounts(profile.tenant_id);
     } catch (error) {
-      console.error("Erro ao carregar pedidos:", error);
+      logger.error("Erro inesperado ao carregar pedidos", error);
     } finally {
       setIsLoading(false);
     }
@@ -179,6 +194,9 @@ export default function OrdersPage() {
     loadOrderCounts,
   ]);
 
+  /**
+   * Ações do pedido
+   */
   const handleAccept = useCallback(
     async (orderId: string) => {
       try {
@@ -188,10 +206,10 @@ export default function OrdersPage() {
           method: "POST",
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Erro ao aceitar pedido");
+        if (!response.ok || !result.success) {
+          throw new Error(result.error);
         }
 
         toast.success("Pedido aceito!", {
@@ -200,11 +218,8 @@ export default function OrdersPage() {
 
         loadOrders();
       } catch (error) {
-        console.error("Erro ao aceitar pedido:", error);
-        toast.error("Erro ao aceitar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
+        logger.error("Erro ao aceitar pedido", error);
+        toast.error("Erro ao aceitar pedido");
       } finally {
         setActionLoading(null);
       }
@@ -219,18 +234,14 @@ export default function OrdersPage() {
 
         const response = await fetch(`/api/orders/${orderId}/reject`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            reason: "Recusado pelo atendente",
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Recusado pelo atendente" }),
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Erro ao recusar pedido");
+        if (!response.ok || !result.success) {
+          throw new Error(result.error);
         }
 
         toast.success("Pedido recusado", {
@@ -239,11 +250,8 @@ export default function OrdersPage() {
 
         loadOrders();
       } catch (error) {
-        console.error("Erro ao recusar pedido:", error);
-        toast.error("Erro ao recusar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
+        logger.error("Erro ao recusar pedido", error);
+        toast.error("Erro ao recusar pedido");
       } finally {
         setActionLoading(null);
       }
@@ -260,10 +268,10 @@ export default function OrdersPage() {
           method: "POST",
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Erro ao completar pedido");
+        if (!response.ok || !result.success) {
+          throw new Error(result.error);
         }
 
         toast.success("Pedido concluído!", {
@@ -272,11 +280,8 @@ export default function OrdersPage() {
 
         loadOrders();
       } catch (error) {
-        console.error("Erro ao completar pedido:", error);
-        toast.error("Erro ao completar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
+        logger.error("Erro ao concluir pedido", error);
+        toast.error("Erro ao concluir pedido");
       } finally {
         setActionLoading(null);
       }
@@ -284,12 +289,14 @@ export default function OrdersPage() {
     [loadOrders]
   );
 
+  /**
+   * Exportações
+   */
   const handleExportCSV = useCallback(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const filename = `pedidos-${today}.csv`;
-    exportToCSV(orders, filename);
-    toast.success("Exportado!", {
-      description: `${orders.length} pedido(s) exportado(s) para CSV`,
+    const date = new Date().toISOString().split("T")[0];
+    exportToCSV(orders, `pedidos-${date}.csv`);
+    toast.success("Exportação concluída", {
+      description: `${orders.length} pedido(s) exportado(s)`,
     });
   }, [orders]);
 
@@ -297,10 +304,16 @@ export default function OrdersPage() {
     exportToPDF(orders);
   }, [orders]);
 
+  /**
+   * Reset de página ao mudar filtros
+   */
   useEffect(() => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   }, [filters]);
 
+  /**
+   * Load inicial + realtime
+   */
   useEffect(() => {
     loadOrders();
 
@@ -309,9 +322,7 @@ export default function OrdersPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
-        () => {
-          loadOrders();
-        }
+        loadOrders
       )
       .subscribe();
 
@@ -320,30 +331,46 @@ export default function OrdersPage() {
     };
   }, [supabase, loadOrders]);
 
+  /**
+   * Navegação para pedido
+   */
+  const handleOrderClick = useCallback(
+    (orderId: string) => {
+      if (!isValidUUID(orderId)) {
+        logger.error("ID de pedido inválido", { orderId });
+        toast.error("ID de pedido inválido");
+        return;
+      }
+      router.push(`/dashboard/orders/${orderId}`);
+    },
+    [router]
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Pedidos</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold sm:text-3xl">Pedidos</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">
             Gerencie todos os pedidos do seu restaurante
           </p>
         </div>
 
-        {/* Botão de exportação */}
+        {/* Exportação */}
         {orders.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2 w-full sm:w-auto"
+                className="flex w-full items-center gap-2 sm:w-auto"
               >
                 <Download className="h-4 w-4" />
                 Exportar
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleExportCSV} className="gap-2">
                 <FileText className="h-4 w-4" />
@@ -352,6 +379,7 @@ export default function OrdersPage() {
                   {orders.length} pedido(s)
                 </span>
               </DropdownMenuItem>
+
               <DropdownMenuItem onClick={handleExportPDF} className="gap-2">
                 <FileText className="h-4 w-4" />
                 Exportar PDF
@@ -365,32 +393,35 @@ export default function OrdersPage() {
       </div>
 
       {/* Filtros */}
-      <OrderFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        orderCounts={orderCounts}
-      />
+      <div className="space-y-4">
+        <OrderFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          orderCounts={orderCounts}
+        />
+      </div>
 
-      {/* Lista de pedidos */}
+      {/* Conteúdo */}
+      {/* Conteúdo */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        // ✅ NOVO: Skeleton ao invés de spinner
+        <OrdersGridSkeleton count={9} />
       ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <PackageX className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <PackageX className="mb-4 h-16 w-16 text-muted-foreground" />
+          <h3 className="mb-2 text-lg font-semibold">
             Nenhum pedido encontrado
           </h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
+          <p className="max-w-sm text-sm text-muted-foreground">
             {filters.status !== "all" || filters.search
               ? "Tente ajustar os filtros de busca"
               : "Aguardando novos pedidos..."}
           </p>
         </div>
       ) : (
-        <>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-6">
+          {/* Lista */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {orders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -398,7 +429,7 @@ export default function OrdersPage() {
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onComplete={handleComplete}
-                onClick={(id) => router.push(`/dashboard/orders/${id}`)}
+                onClick={handleOrderClick}
                 isLoading={actionLoading === order.id}
               />
             ))}
@@ -413,7 +444,7 @@ export default function OrdersPage() {
               setPagination((prev) => ({ ...prev, page }))
             }
           />
-        </>
+        </div>
       )}
     </div>
   );

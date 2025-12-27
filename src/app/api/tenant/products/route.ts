@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { authenticateTenant } from '@/lib/auth/tenant'
 
+import { logger } from "@/lib/logger";
 interface Product {
   id: string
   name: string
@@ -43,7 +44,7 @@ export async function GET(
       .order('name', { ascending: true })
 
     if (error) {
-      console.error('❌ Erro ao buscar produtos:', error)
+      logger.error('❌ Erro ao buscar produtos:', error)
       throw error
     }
 
@@ -57,7 +58,7 @@ export async function GET(
     })
 
   } catch (error) {
-    console.error('❌ Erro na API de produtos:', error)
+    logger.error('❌ Erro na API de produtos:', error)
     
     return NextResponse.json(
       {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 
+import { logger } from "@/lib/logger";
 export function LoginForm() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
@@ -24,20 +25,20 @@ export function LoginForm() {
     setIsLoading(true)
     setError("")
 
-    console.log('🔐 [Login] Iniciando processo de login')
-    console.log('📧 [Login] Email:', email)
+    logger.debug('🔐 [Login] Iniciando processo de login')
+    logger.debug('📧 [Login] Email:', email)
 
     try {
       // Validações básicas
       if (!email || !password) {
-        console.log('❌ [Login] Campos vazios')
+        logger.debug('❌ [Login] Campos vazios')
         setError("Preencha todos os campos")
         setIsLoading(false)
         return
       }
 
-      console.log('✅ [Login] Validações básicas OK')
-      console.log('🔄 [Login] Chamando supabase.auth.signInWithPassword...')
+      logger.debug('✅ [Login] Validações básicas OK')
+      logger.debug('🔄 [Login] Chamando supabase.auth.signInWithPassword...')
 
       // Login com Supabase
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -45,14 +46,14 @@ export function LoginForm() {
         password: password,
       })
 
-      console.log('📦 [Login] Resposta do Supabase:')
-      console.log('  - data:', data)
-      console.log('  - error:', authError)
+      logger.debug('📦 [Login] Resposta do Supabase:')
+      logger.debug('  - data:', data)
+      logger.debug('  - error:', authError)
 
       if (authError) {
-        console.error('❌ [Login] Erro de autenticação:', authError.message)
-        console.error('❌ [Login] Código:', authError.status)
-        console.error('❌ [Login] Nome:', authError.name)
+        logger.error('❌ [Login] Erro de autenticação:', authError.message)
+        logger.error('❌ [Login] Código:', authError.status)
+        logger.error('❌ [Login] Nome:', authError.name)
         
         // Mensagens de erro mais amigáveis
         if (authError.message.includes('Invalid login credentials')) {
@@ -70,33 +71,33 @@ export function LoginForm() {
       }
 
       if (!data) {
-        console.error('❌ [Login] Data é null')
+        logger.error('❌ [Login] Data é null')
         setError('Erro ao fazer login. Tente novamente.')
         setIsLoading(false)
         return
       }
 
       if (!data.user) {
-        console.error('❌ [Login] User é null')
+        logger.error('❌ [Login] User é null')
         setError('Erro ao fazer login. Tente novamente.')
         setIsLoading(false)
         return
       }
 
       if (!data.session) {
-        console.error('❌ [Login] Session é null')
+        logger.error('❌ [Login] Session é null')
         setError('Erro ao criar sessão. Tente novamente.')
         setIsLoading(false)
         return
       }
 
-      console.log('✅ [Login] Autenticação OK')
-      console.log('👤 [Login] User ID:', data.user.id)
-      console.log('📧 [Login] Email:', data.user.email)
-      console.log('🔑 [Login] Session:', data.session ? 'OK' : 'MISSING')
+      logger.debug('✅ [Login] Autenticação OK')
+      logger.debug('👤 [Login] User ID:', data.user.id)
+      logger.debug('📧 [Login] Email:', data.user.email)
+      logger.debug('🔑 [Login] Session:', data.session ? 'OK' : 'MISSING')
 
       // Verificar se o usuário tem um profile (tenant)
-      console.log('🔄 [Login] Buscando profile...')
+      logger.debug('🔄 [Login] Buscando profile...')
       
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -104,12 +105,12 @@ export function LoginForm() {
         .eq('id', data.user.id)
         .single()
 
-      console.log('📦 [Login] Resposta do profile:')
-      console.log('  - profile:', profile)
-      console.log('  - error:', profileError)
+      logger.debug('📦 [Login] Resposta do profile:')
+      logger.debug('  - profile:', profile)
+      logger.debug('  - error:', profileError)
 
       if (profileError) {
-        console.error('❌ [Login] Erro ao buscar profile:', profileError.message)
+        logger.error('❌ [Login] Erro ao buscar profile:', profileError.message)
         setError('Perfil não encontrado. Entre em contato com o suporte.')
         await supabase.auth.signOut()
         setIsLoading(false)
@@ -117,32 +118,32 @@ export function LoginForm() {
       }
 
       if (!profile) {
-        console.error('❌ [Login] Profile é null')
+        logger.error('❌ [Login] Profile é null')
         setError('Perfil não encontrado. Entre em contato com o suporte.')
         await supabase.auth.signOut()
         setIsLoading(false)
         return
       }
 
-      console.log('✅ [Login] Profile encontrado')
-      console.log('🏢 [Login] Tenant ID:', profile.tenant_id)
-      console.log('👤 [Login] Nome:', profile.full_name)
+      logger.debug('✅ [Login] Profile encontrado')
+      logger.debug('🏢 [Login] Tenant ID:', profile.tenant_id)
+      logger.debug('👤 [Login] Nome:', profile.full_name)
 
       // Pequeno delay para garantir que a sessão foi salva nos cookies
-      console.log('⏳ [Login] Aguardando 500ms...')
+      logger.debug('⏳ [Login] Aguardando 500ms...')
       await new Promise(resolve => setTimeout(resolve, 500))
 
       // Sucesso! Redirecionar para dashboard
-      console.log('✅ [Login] Login completo!')
-      console.log('➡️ [Login] Redirecionando para /dashboard')
+      logger.debug('✅ [Login] Login completo!')
+      logger.debug('➡️ [Login] Redirecionando para /dashboard')
       
       router.push('/dashboard')
       router.refresh()
 
     } catch (error) {
-      console.error('❌ [Login] CATCH - Erro inesperado:', error)
-      console.error('❌ [Login] CATCH - Tipo:', typeof error)
-      console.error('❌ [Login] CATCH - Stack:', error instanceof Error ? error.stack : 'N/A')
+      logger.error('❌ [Login] CATCH - Erro inesperado:', error)
+      logger.error('❌ [Login] CATCH - Tipo:', typeof error)
+      logger.error('❌ [Login] CATCH - Stack:', error instanceof Error ? error.stack : 'N/A')
       
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
       setError(`Erro inesperado: ${errorMessage}`)

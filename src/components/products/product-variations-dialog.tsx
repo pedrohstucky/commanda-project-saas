@@ -1,17 +1,17 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useCallback } from "react";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -19,15 +19,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Plus, Trash2, Loader2 } from "lucide-react"
-import { toast } from "sonner"
-import type { Product, ProductVariation } from "@/lib/types/product"
+} from "@/components/ui/table";
+import { Plus, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import type { Product, ProductVariation } from "@/lib/types/product";
+import { CurrencyInput } from "../ui/currency-input";
+import { logger } from "@/lib/logger";
 
 interface ProductVariationsDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  product: Product | null
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product: Product | null;
 }
 
 /**
@@ -38,145 +40,180 @@ export function ProductVariationsDialog({
   onOpenChange,
   product,
 }: ProductVariationsDialogProps) {
-  const supabase = createBrowserSupabaseClient()
-  
-  const [variations, setVariations] = useState<ProductVariation[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  
+  const supabase = createBrowserSupabaseClient();
+
+  const [variations, setVariations] = useState<ProductVariation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [newVariation, setNewVariation] = useState({
     name: "",
-    price_modifier: 0,
-  })
+    price: 0,
+  });
 
   /**
    * Carrega variações do produto
    */
   const loadVariations = useCallback(async () => {
-    if (!product) return
+    if (!product) return;
 
     try {
-      setIsLoading(true)
+      setIsLoading(true);
 
       const { data, error } = await supabase
         .from("product_variations")
         .select("*")
         .eq("product_id", product.id)
-        .order("display_order")
+        .order("display_order");
 
-      if (error) throw error
+      if (error) throw error;
 
-      setVariations(data || [])
+      setVariations(data || []);
     } catch (error) {
-      console.error("Erro ao carregar variações:", error)
-      toast.error("Erro ao carregar variações")
+      logger.error("Erro ao carregar variações:", error);
+      toast.error("Erro ao carregar variações");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [supabase, product])
+  }, [supabase, product]);
 
   /**
    * Adiciona nova variação
    */
   const handleAdd = useCallback(async () => {
-    if (!product) return
-    if (!newVariation.name.trim()) {
-      toast.error("Nome da variação é obrigatório")
-      return
+    console.log("🔵 handleAdd chamado"); // ← DEBUG
+    console.log("Product:", product); // ← DEBUG
+    console.log("newVariation:", newVariation); // ← DEBUG
+
+    if (!product) {
+      console.log("❌ Sem produto"); // ← DEBUG
+      return;
     }
+
+    if (!newVariation.name.trim()) {
+      console.log("❌ Nome vazio"); // ← DEBUG
+      toast.error("Nome da variação é obrigatório");
+      return;
+    }
+
+    console.log("✅ Validações passaram"); // ← DEBUG
 
     try {
-      setIsSaving(true)
+      setIsSaving(true);
+      console.log("🔄 Salvando..."); // ← DEBUG
 
       // Calcular próxima ordem
-      const maxOrder = variations.length > 0
-        ? Math.max(...variations.map(v => v.display_order))
-        : 0
+      const maxOrder =
+        variations.length > 0
+          ? Math.max(...variations.map((v) => v.display_order))
+          : 0;
 
-      const { error } = await supabase
+      const dataToInsert = {
+        product_id: product.id,
+        name: newVariation.name,
+        price: newVariation.price, // ✅ Certifique-se que é 'price'
+        display_order: maxOrder + 1,
+        is_available: true,
+      };
+
+      console.log("📦 Dados a inserir:", dataToInsert); // ← DEBUG
+
+      const { data, error } = await supabase
         .from("product_variations")
-        .insert({
-          product_id: product.id,
-          name: newVariation.name,
-          price_modifier: newVariation.price_modifier,
-          display_order: maxOrder + 1,
-          is_available: true,
-        })
+        .insert(dataToInsert)
+        .select(); // ← ADICIONAR .select() para retornar dados
 
-      if (error) throw error
+      console.log("📊 Resultado:", { data, error }); // ← DEBUG
 
-      toast.success("Variação adicionada!")
-      setNewVariation({ name: "", price_modifier: 0 })
-      loadVariations()
+      if (error) {
+        console.error("❌ Erro do Supabase:", error); // ← DEBUG
+        throw error;
+      }
+
+      console.log("✅ Variação inserida:", data); // ← DEBUG
+      toast.success("Variação adicionada!");
+      setNewVariation({ name: "", price: 0 });
+      await loadVariations();
+      console.log("✅ Lista recarregada"); // ← DEBUG
     } catch (error) {
-      console.error("Erro ao adicionar variação:", error)
-      toast.error("Erro ao adicionar variação")
+      console.error("💥 Erro capturado:", error); // ← DEBUG
+      logger.error("Erro ao adicionar variação:", error);
+      toast.error("Erro ao adicionar variação");
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
+      console.log("🏁 handleAdd finalizado"); // ← DEBUG
     }
-  }, [supabase, product, variations, newVariation, loadVariations])
+  }, [supabase, product, variations, newVariation, loadVariations]);
 
   /**
    * Deleta variação
    */
-  const handleDelete = useCallback(async (variationId: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta variação?")) {
-      return
-    }
+  const handleDelete = useCallback(
+    async (variationId: string) => {
+      if (!confirm("Tem certeza que deseja excluir esta variação?")) {
+        return;
+      }
 
-    try {
-      const { error } = await supabase
-        .from("product_variations")
-        .delete()
-        .eq("id", variationId)
+      try {
+        const { error } = await supabase
+          .from("product_variations")
+          .delete()
+          .eq("id", variationId);
 
-      if (error) throw error
+        if (error) throw error;
 
-      toast.success("Variação excluída!")
-      loadVariations()
-    } catch (error) {
-      console.error("Erro ao excluir variação:", error)
-      toast.error("Erro ao excluir variação")
-    }
-  }, [supabase, loadVariations])
+        toast.success("Variação excluída!");
+        loadVariations();
+      } catch (error) {
+        logger.error("Erro ao excluir variação:", error);
+        toast.error("Erro ao excluir variação");
+      }
+    },
+    [supabase, loadVariations]
+  );
 
   /**
    * Toggle disponibilidade
    */
-  const toggleAvailable = useCallback(async (variation: ProductVariation) => {
-    try {
-      const { error } = await supabase
-        .from("product_variations")
-        .update({ is_available: !variation.is_available })
-        .eq("id", variation.id)
+  const toggleAvailable = useCallback(
+    async (variation: ProductVariation) => {
+      try {
+        const { error } = await supabase
+          .from("product_variations")
+          .update({ is_available: !variation.is_available })
+          .eq("id", variation.id);
 
-      if (error) throw error
+        if (error) throw error;
 
-      toast.success(
-        variation.is_available ? "Variação desativada" : "Variação ativada"
-      )
-      loadVariations()
-    } catch (error) {
-      console.error("Erro ao atualizar variação:", error)
-      toast.error("Erro ao atualizar variação")
-    }
-  }, [supabase, loadVariations])
+        toast.success(
+          variation.is_available ? "Variação desativada" : "Variação ativada"
+        );
+        loadVariations();
+      } catch (error) {
+        logger.error("Erro ao atualizar variação:", error);
+        toast.error("Erro ao atualizar variação");
+      }
+    },
+    [supabase, loadVariations]
+  );
 
   /**
    * Formata valor monetário
    */
   const formatPrice = (value: number) => {
-    const sign = value >= 0 ? "+" : ""
-    return `${sign}R$ ${Math.abs(value).toFixed(2)}`
-  }
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
 
   useEffect(() => {
     if (open && product) {
-      loadVariations()
+      loadVariations();
     }
-  }, [open, product, loadVariations])
+  }, [open, product, loadVariations]);
 
-  if (!product) return null
+  if (!product) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,7 +226,7 @@ export function ProductVariationsDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Adicionar nova variação */}
+          {/* Input de nova variação */}
           <div className="grid grid-cols-[1fr,140px,auto] gap-2">
             <Input
               placeholder="Nome (ex: Grande, 2L)"
@@ -198,23 +235,16 @@ export function ProductVariationsDialog({
                 setNewVariation({ ...newVariation, name: e.target.value })
               }
             />
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="Modificador"
-              value={newVariation.price_modifier}
-              onChange={(e) =>
-                setNewVariation({
-                  ...newVariation,
-                  price_modifier: parseFloat(e.target.value) || 0,
-                })
+
+            <CurrencyInput
+              value={newVariation.price || 0}
+              onChange={(value) =>
+                setNewVariation({ ...newVariation, price: value })
               }
+              placeholder="R$ 0,00"
             />
-            <Button
-              onClick={handleAdd}
-              disabled={isSaving}
-              className="gap-2"
-            >
+
+            <Button onClick={handleAdd} disabled={isSaving} className="gap-2">
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -224,9 +254,17 @@ export function ProductVariationsDialog({
             </Button>
           </div>
 
+          {/* ATUALIZAR DESCRIÇÃO */}
           <p className="text-xs text-muted-foreground">
-            Modificador: valor a adicionar (+) ou descontar (-) do preço base
+            Preço específico desta variação
           </p>
+
+          <TableBody>
+            {variations.map((variation) => (
+              <TableRow key={variation.id}>
+              </TableRow>
+            ))}
+          </TableBody>
 
           {/* Lista de variações */}
           {isLoading ? (
@@ -246,7 +284,6 @@ export function ProductVariationsDialog({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Modificador</TableHead>
                     <TableHead>Preço Final</TableHead>
                     <TableHead className="w-24">Ativo</TableHead>
                     <TableHead className="w-16"></TableHead>
@@ -258,11 +295,8 @@ export function ProductVariationsDialog({
                       <TableCell className="font-medium">
                         {variation.name}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatPrice(variation.price_modifier)}
-                      </TableCell>
                       <TableCell className="font-semibold">
-                        R$ {(product.price + variation.price_modifier).toFixed(2)}
+                        {formatPrice(variation.price)}
                       </TableCell>
                       <TableCell>
                         <Switch
@@ -289,5 +323,5 @@ export function ProductVariationsDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

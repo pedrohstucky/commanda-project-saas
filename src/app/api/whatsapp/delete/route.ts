@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (inngestSecret === process.env.INNGEST_INTERNAL_SECRET && tenantId) {
       // Chamada do Inngest - usar tenantId do body
       finalTenantId = tenantId;
-      console.log("🔧 Chamada do Inngest para tenant:", finalTenantId);
+      logger.debug("🔧 Chamada do Inngest para tenant:", finalTenantId);
     } else {
       // Chamada normal - verificar auth
       const supabase = await createClient();
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     const uazapiData = await uazapiResponse.json();
-    console.log("Uazapi delete response:", uazapiData);
+    logger.debug("Uazapi delete response:", uazapiData);
 
     // Deletar instância do banco usando supabaseAdmin
     await supabaseAdmin
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Erro ao deletar instância:", error);
+    logger.error("Erro ao deletar instância:", error);
     return NextResponse.json(
       { error: "Erro ao deletar instância" },
       { status: 500 }

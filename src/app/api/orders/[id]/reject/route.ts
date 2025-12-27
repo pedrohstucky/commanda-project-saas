@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+import { logger } from "@/lib/logger";
 /**
  * Request body para recusar pedido
  */
@@ -93,7 +94,7 @@ export async function POST(
       throw updateError
     }
 
-    console.log(`✅ Pedido ${orderId} recusado por ${user.email}. Motivo: ${reason}`)
+    logger.debug(`✅ Pedido ${orderId} recusado por ${user.email}. Motivo: ${reason}`)
 
     return NextResponse.json({
       success: true,
@@ -106,7 +107,7 @@ export async function POST(
     })
 
   } catch (error) {
-    console.error('❌ Erro ao recusar pedido:', error)
+    logger.error('❌ Erro ao recusar pedido:', error)
     
     return NextResponse.json(
       {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 
+import { logger } from "@/lib/logger";
 export default function ForgotPasswordPage() {
   const supabase = createBrowserSupabaseClient()
   const [email, setEmail] = useState("")
@@ -30,7 +31,7 @@ export default function ForgotPasswordPage() {
 
       setSuccess(true)
     } catch (error) {
-      console.error('Erro:', error)
+      logger.error('Erro:', error)
       setError('Erro ao enviar email. Tente novamente.')
     } finally {
       setIsLoading(false)

@@ -1,30 +1,35 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { OrderStatusBadge } from "./order-status-badge"
-import { 
-  MapPin, 
-  Phone, 
-  Clock, 
-  Package, 
-  Check, 
-  X, 
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { OrderStatusBadge } from "./order-status-badge";
+import {
+  MapPin,
+  Phone,
+  Clock,
+  Package,
+  Check,
+  X,
   CheckCircle,
   Loader2,
-  ShoppingBag
-} from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import type { Order } from "@/lib/types/order"
+  ShoppingBag,
+} from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import type { Order } from "@/lib/types/order";
 
 interface OrderCardProps {
-  order: Order
-  onAccept?: (orderId: string) => void
-  onReject?: (orderId: string) => void
-  onComplete?: (orderId: string) => void
-  onClick?: (orderId: string) => void
-  isLoading?: boolean
+  order: Order;
+  onAccept?: (orderId: string) => void;
+  onReject?: (orderId: string) => void;
+  onComplete?: (orderId: string) => void;
+  onClick?: (orderId: string) => void;
+  isLoading?: boolean;
 }
 
 export function OrderCard({
@@ -39,18 +44,18 @@ export function OrderCard({
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(value)
-  }
+    }).format(value);
+  };
 
   return (
-    <Card 
+    <Card
       className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
       onClick={() => onClick?.(order.id)}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium">
+            <p className="text-lg font-bold">
               {order.customer_name || "Cliente sem nome"}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -69,7 +74,9 @@ export function OrderCard({
         {order.customer_phone && (
           <div className="flex items-center gap-2 text-sm">
             <Phone className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">{order.customer_phone}</span>
+            <span className="text-muted-foreground">
+              {order.customer_phone}
+            </span>
           </div>
         )}
 
@@ -99,18 +106,29 @@ export function OrderCard({
             </div>
             <div className="space-y-0.5">
               {order.order_items.slice(0, 3).map((item) => (
-                <div key={item.id} className="text-sm flex items-start justify-between gap-2">
-                  <span className="flex-1 line-clamp-1">
-                    {item.quantity}x {item.product_name}
-                    {item.variation_name && (
-                      <span className="text-xs text-muted-foreground ml-1">
-                        ({item.variation_name})
-                      </span>
+                <div key={item.id} className="space-y-0.5">
+                  <div className="text-sm flex items-start justify-between gap-2">
+                    <span className="flex-1 line-clamp-1">
+                      {item.quantity}x {item.product_name}
+                      {item.variation_name && (
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({item.variation_name})
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatCurrency(item.subtotal)}
+                    </span>
+                  </div>
+                  {/* Mostrar extras */}
+                  {item.order_item_extras &&
+                    item.order_item_extras.length > 0 && (
+                      <div className="text-xs text-muted-foreground pl-4 flex flex-wrap gap-1">
+                        {item.order_item_extras.map((extra) => (
+                          <span key={extra.id}>+{extra.extra_name}</span>
+                        ))}
+                      </div>
                     )}
-                  </span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatCurrency(item.subtotal)}
-                  </span>
                 </div>
               ))}
               {order.order_items.length > 3 && (
@@ -141,8 +159,8 @@ export function OrderCard({
               size="sm"
               className="flex-1 min-w-[120px]"
               onClick={(e) => {
-                e.stopPropagation()
-                onAccept?.(order.id)
+                e.stopPropagation();
+                onAccept?.(order.id);
               }}
               disabled={isLoading}
             >
@@ -160,8 +178,8 @@ export function OrderCard({
               size="sm"
               className="flex-1 min-w-[120px]"
               onClick={(e) => {
-                e.stopPropagation()
-                onReject?.(order.id)
+                e.stopPropagation();
+                onReject?.(order.id);
               }}
               disabled={isLoading}
             >
@@ -177,8 +195,8 @@ export function OrderCard({
             size="sm"
             className="w-full"
             onClick={(e) => {
-              e.stopPropagation()
-              onComplete?.(order.id)
+              e.stopPropagation();
+              onComplete?.(order.id);
             }}
             disabled={isLoading}
           >
@@ -195,5 +213,5 @@ export function OrderCard({
         )}
       </CardFooter>
     </Card>
-  )
+  );
 }

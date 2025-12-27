@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 
+import { logger } from "@/lib/logger";
 interface WhatsAppInstance {
   id: string
   status: string
@@ -41,14 +42,14 @@ export function useWhatsAppStatus() {
           .single()
 
         if (error) {
-          console.error("Erro ao carregar instância:", error)
+          logger.error("Erro ao carregar instância:", error)
           setInstance(null)
         } else {
           setInstance(data)
         }
       }
     } catch (error) {
-      console.error("Erro:", error)
+      logger.error("Erro:", error)
     } finally {
       setIsLoading(false)
     }

@@ -1,16 +1,16 @@
 "use client"
 
-import * as React from "react"
-import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+import React from "react"
+import { Provider, Root, Trigger, Content, Portal, Arrow } from "@radix-ui/react-tooltip"
 
 import { cn } from "@/lib/utils"
 
 function TooltipProvider({
   delayDuration = 0,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+}: React.ComponentProps<typeof Provider>) {
   return (
-    <TooltipPrimitive.Provider
+    <Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
       {...props}
@@ -20,18 +20,18 @@ function TooltipProvider({
 
 function Tooltip({
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+}: React.ComponentProps<typeof Root>) {
   return (
     <TooltipProvider>
-      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+      <Root data-slot="tooltip" {...props} />
     </TooltipProvider>
   )
 }
 
 function TooltipTrigger({
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+}: React.ComponentProps<typeof Trigger>) {
+  return <Trigger data-slot="tooltip-trigger" {...props} />
 }
 
 function TooltipContent({
@@ -39,10 +39,10 @@ function TooltipContent({
   sideOffset = 0,
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof Content>) {
   return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
+    <Portal>
+      <Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
@@ -52,9 +52,9 @@ function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+        <Arrow className="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+      </Content>
+    </Portal>
   )
 }
 

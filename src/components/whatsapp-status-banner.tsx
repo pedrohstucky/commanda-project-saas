@@ -13,6 +13,7 @@ import { useWhatsAppStatus } from "@/hooks/use-whatsapp-status"
 import { WhatsAppQRCodeModal } from "./whatsapp-qrcode-modal"
 import { useRouter } from "next/navigation"
 
+import { logger } from "@/lib/logger";
 export function WhatsAppStatusBanner() {
   const router = useRouter()
   const { instance, isConnected, isConnecting, isDisconnected, isLoading } = useWhatsAppStatus()
@@ -37,7 +38,7 @@ export function WhatsAppStatusBanner() {
         window.location.reload()
       }, 1000)
     } catch (error) {
-      console.error("Erro:", error)
+      logger.error("Erro:", error)
       alert(error instanceof Error ? error.message : "Erro ao gerar QR Code")
     } finally {
       setIsGeneratingQR(false)

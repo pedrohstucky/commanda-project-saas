@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
+import { logger } from "@/lib/logger";
 import {
   MessageSquare,
   Smartphone,
@@ -35,7 +36,7 @@ export default function LandingPage() {
         router.replace("/dashboard")
       }
     } catch (error) {
-      console.error("Erro ao verificar auth:", error)
+      logger.error("Erro ao verificar auth:", error)
     }
   }, [router, supabase])
 

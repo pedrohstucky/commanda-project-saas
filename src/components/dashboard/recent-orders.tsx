@@ -1,65 +1,76 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
-import { OrderStatusBadge } from "@/components/orders/order-status-badge"
-import { ArrowRight } from "lucide-react"
-import { useRouter } from "next/navigation"
-import type { OrderStatus } from "@/lib/types/order"
+import { useEffect, useState, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { OrderStatus } from "@/lib/types/order";
+import { logger } from "@/lib/logger";
+import { toast } from "sonner"
+import { RecentOrdersSkeleton } from "../ui/skeleton-patterns";
 
 interface OrderRow {
-  id: string
-  customer_name: string | null
-  total_amount: number
-  status: OrderStatus
-  created_at: string
+  id: string;
+  customer_name: string | null;
+  total_amount: number;
+  status: OrderStatus;
+  created_at: string;
 }
 
+function isValidUUID(id: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(id)
+}
+
+
 export function RecentOrders() {
-  const supabase = createBrowserSupabaseClient()
-  const router = useRouter()
-  const [orders, setOrders] = useState<OrderRow[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const supabase = createBrowserSupabaseClient();
+  const router = useRouter();
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadRecentOrders = useCallback(async () => {
     try {
-      setIsLoading(true)
+      setIsLoading(true);
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user.id)
-        .single()
+        .single();
 
-      if (!profile) return
+      if (!profile) return;
 
       const { data, error } = await supabase
         .from("orders")
         .select("id, customer_name, total_amount, status, created_at")
         .eq("tenant_id", profile.tenant_id)
         .order("created_at", { ascending: false })
-        .limit(5)
+        .limit(5);
 
       if (error) {
-        console.error("Erro ao carregar pedidos recentes:", error)
-        return
+        logger.error("Erro ao carregar pedidos recentes:", error);
+        return;
       }
 
-      setOrders(data ?? [])
+      setOrders(data ?? []);
     } catch (error) {
-      console.error("Erro ao carregar pedidos recentes:", error)
+      logger.error("Erro ao carregar pedidos recentes:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [supabase])
+  }, [supabase]);
 
   useEffect(() => {
-    loadRecentOrders()
+    loadRecentOrders();
 
     const channel = supabase
       .channel("recent-orders")
@@ -71,21 +82,21 @@ export function RecentOrders() {
           table: "orders",
         },
         () => {
-          loadRecentOrders()
+          loadRecentOrders();
         }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [loadRecentOrders, supabase])
+      supabase.removeChannel(channel);
+    };
+  }, [loadRecentOrders, supabase]);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(value)
+    }).format(value);
 
   const formatDate = (date: string) => {
     try {
@@ -94,11 +105,21 @@ export function RecentOrders() {
         month: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
-      })
+      });
     } catch {
-      return "Data inválida"
+      return "Data inválida";
     }
-  }
+  };
+
+  const handleOrderClick = useCallback((orderId: string) => {
+    if (!isValidUUID(orderId)) {
+      logger.error('ID de pedido inválido', { orderId })
+      toast.error('ID de pedido inválido')
+      return
+    }
+    router.push(`/dashboard/orders/${orderId}`)
+  }, [router])
+  
 
   return (
     <Card>
@@ -116,9 +137,7 @@ export function RecentOrders() {
 
       <CardContent>
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Carregando...
-          </div>
+          <RecentOrdersSkeleton />
         ) : orders.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             Nenhum pedido ainda
@@ -129,7 +148,7 @@ export function RecentOrders() {
               <div
                 key={order.id}
                 className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer transition-colors"
-                onClick={() => router.push(`/dashboard/orders/${order.id}`)}
+                onClick={() => handleOrderClick(order.id)}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -152,5 +171,5 @@ export function RecentOrders() {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

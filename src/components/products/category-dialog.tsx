@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch"
 import { Loader2 } from "lucide-react"
 import type { Category } from "@/lib/types/product"
 
+import { logger } from "@/lib/logger";
 interface CategoryFormData {
   name: string
   description?: string
@@ -74,7 +75,7 @@ export function CategoryDialog({
       await onSave(formData)
       onOpenChange(false)
     } catch (error) {
-      console.error("Erro ao salvar categoria:", error)
+      logger.error("Erro ao salvar categoria:", error)
     } finally {
       setIsLoading(false)
     }

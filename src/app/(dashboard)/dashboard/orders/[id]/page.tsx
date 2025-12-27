@@ -26,6 +26,7 @@ import type { OrderWithItems } from "@/lib/types/order";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+import { logger } from "@/lib/logger";
 /**
  * Página de detalhes do pedido
  *
@@ -107,6 +108,12 @@ export default function OrderDetailsPage() {
           variation_id,
           variation_name,
           subtotal,
+          order_item_extras (
+            id,
+            extra_id,
+            extra_name,
+            extra_price
+          ),
           products (
             id,
             name,
@@ -122,7 +129,7 @@ export default function OrderDetailsPage() {
         .single();
 
       if (error) {
-        console.error("Erro ao carregar pedido:", error);
+        logger.error("Erro ao carregar pedido:", error);
         toast.error("Erro ao carregar pedido", {
           description: error.message,
         });
@@ -131,12 +138,12 @@ export default function OrderDetailsPage() {
       }
 
       // ← ADICIONAR LOGS PARA DEBUG
-      console.log("📦 Pedido carregado:", data);
-      console.log("📦 Order items:", data?.order_items);
+      logger.debug("📦 Pedido carregado:", data);
+      logger.debug("📦 Order items:", data?.order_items);
 
       setOrder(data as OrderWithItems);
     } catch (error) {
-      console.error("Erro ao carregar pedido:", error);
+      logger.error("Erro ao carregar pedido:", error);
       toast.error("Erro ao carregar pedido");
       router.push("/dashboard/orders");
     } finally {
@@ -172,7 +179,7 @@ export default function OrderDetailsPage() {
 
         loadOrder();
       } catch (error) {
-        console.error("Erro ao aceitar pedido:", error);
+        logger.error("Erro ao aceitar pedido:", error);
         toast.error("Erro ao aceitar pedido", {
           description:
             error instanceof Error ? error.message : "Tente novamente",
@@ -214,7 +221,7 @@ export default function OrderDetailsPage() {
 
         loadOrder();
       } catch (error) {
-        console.error("Erro ao recusar pedido:", error);
+        logger.error("Erro ao recusar pedido:", error);
         toast.error("Erro ao recusar pedido", {
           description:
             error instanceof Error ? error.message : "Tente novamente",
@@ -250,7 +257,7 @@ export default function OrderDetailsPage() {
 
         loadOrder();
       } catch (error) {
-        console.error("Erro ao completar pedido:", error);
+        logger.error("Erro ao completar pedido:", error);
         toast.error("Erro ao completar pedido", {
           description:
             error instanceof Error ? error.message : "Tente novamente",
@@ -315,10 +322,10 @@ export default function OrderDetailsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -326,8 +333,9 @@ export default function OrderDetailsPage() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">
+  
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold sm:text-3xl">
               Pedido #{order.id.slice(0, 8)}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -335,18 +343,24 @@ export default function OrderDetailsPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+  
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <OrderStatusBadge status={order.status} />
-          <Button variant="outline" size="icon" onClick={() => window.print()}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => window.print()}
+          >
             <Printer className="h-4 w-4" />
           </Button>
         </div>
       </div>
-
+  
+      {/* Conteúdo */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Coluna Principal */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Itens do Pedido */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Itens */}
           <Card>
             <CardHeader>
               <CardTitle>Itens do Pedido</CardTitle>
@@ -355,7 +369,7 @@ export default function OrderDetailsPage() {
               <OrderItemsList items={order.order_items || []} />
             </CardContent>
           </Card>
-
+  
           {/* Timeline */}
           <Card>
             <CardHeader>
@@ -366,34 +380,33 @@ export default function OrderDetailsPage() {
             </CardContent>
           </Card>
         </div>
-
+  
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Informações do Cliente */}
+          {/* Cliente */}
           <Card>
             <CardHeader>
               <CardTitle>Cliente</CardTitle>
             </CardHeader>
+  
             <CardContent className="space-y-4">
-              {/* Nome */}
               {order.customer_name && (
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{order.customer_name}</span>
                 </div>
               )}
-
-              {/* Telefone */}
+  
               {order.customer_phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{order.customer_phone}</span>
                 </div>
               )}
-
+  
               <Separator />
-
-              {/* Tipo de Entrega */}
+  
+              {/* Entrega */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   {order.delivery_type === "delivery" ? (
@@ -410,17 +423,15 @@ export default function OrderDetailsPage() {
                     </>
                   )}
                 </div>
-
-                {/* Endereço (apenas se for entrega) */}
+  
                 {order.delivery_type === "delivery" &&
                   order.delivery_address && (
-                    <p className="text-sm text-muted-foreground pl-6">
+                    <p className="pl-6 text-sm text-muted-foreground">
                       {order.delivery_address}
                     </p>
                   )}
               </div>
-
-              {/* Observações */}
+  
               {order.notes && (
                 <>
                   <Separator />
@@ -429,7 +440,7 @@ export default function OrderDetailsPage() {
                       <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">Observações</span>
                     </div>
-                    <p className="text-sm text-muted-foreground pl-6">
+                    <p className="pl-6 text-sm text-muted-foreground">
                       {order.notes}
                     </p>
                   </div>
@@ -437,28 +448,30 @@ export default function OrderDetailsPage() {
               )}
             </CardContent>
           </Card>
-
+  
           {/* Resumo */}
           <Card>
             <CardHeader>
               <CardTitle>Resumo</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Criado:</span>
                 <span>{formatDate(order.created_at)}</span>
               </div>
+  
               <Separator />
+  
               <div className="flex items-center justify-between">
                 <span className="font-semibold">Total</span>
-                <span className="text-2xl font-bold">
+                <span className="text-xl font-bold sm:text-2xl">
                   {formatCurrency(order.total_amount)}
                 </span>
               </div>
             </CardContent>
           </Card>
-
+  
           {/* Ações */}
           <Card>
             <CardHeader>
@@ -479,4 +492,5 @@ export default function OrderDetailsPage() {
       </div>
     </div>
   );
+  
 }

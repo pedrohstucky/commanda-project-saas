@@ -9,6 +9,7 @@ import {
 import { generateApiKey } from "@/lib/utils";
 import type { Database } from "@/lib/types/database";
 
+import { logger } from "@/lib/logger";
 // Types auxiliares
 type TenantInsert = Database["public"]["Tables"]["tenants"]["Insert"];
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
@@ -110,66 +111,66 @@ interface RollbackParams {
 }
 
 async function rollbackOnboarding(params: RollbackParams): Promise<void> {
-  console.log("🔄 Iniciando rollback...");
+  logger.debug("🔄 Iniciando rollback...");
 
   const { userId, tenantId, instanceToken } = params;
 
   // 1. Deletar instância Uazapi
   if (instanceToken) {
     try {
-      console.log("🗑️ Deletando instância Uazapi...");
+      logger.debug("🗑️ Deletando instância Uazapi...");
       await deleteInstance(instanceToken);
-      console.log("✅ Instância Uazapi deletada");
+      logger.debug("✅ Instância Uazapi deletada");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      console.error("⚠️ Erro ao deletar instância Uazapi:", errorMessage);
+      logger.error("⚠️ Erro ao deletar instância Uazapi:", errorMessage);
     }
   }
 
   // 2. Deletar whatsapp_instance
   if (tenantId) {
     try {
-      console.log("🗑️ Deletando whatsapp_instances...");
+      logger.debug("🗑️ Deletando whatsapp_instances...");
       await supabaseAdmin
         .from("whatsapp_instances")
         .delete()
         .eq("tenant_id", tenantId);
-      console.log("✅ whatsapp_instances deletado");
+      logger.debug("✅ whatsapp_instances deletado");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      console.error("⚠️ Erro ao deletar whatsapp_instances:", errorMessage);
+      logger.error("⚠️ Erro ao deletar whatsapp_instances:", errorMessage);
     }
   }
 
   // 3. Deletar tenant (CASCADE deleta profile)
   if (tenantId) {
     try {
-      console.log("🗑️ Deletando tenant...");
+      logger.debug("🗑️ Deletando tenant...");
       await supabaseAdmin.from("tenants").delete().eq("id", tenantId);
-      console.log("✅ Tenant deletado");
+      logger.debug("✅ Tenant deletado");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      console.error("⚠️ Erro ao deletar tenant:", errorMessage);
+      logger.error("⚠️ Erro ao deletar tenant:", errorMessage);
     }
   }
 
   // 4. Deletar auth.user
   if (userId) {
     try {
-      console.log("🗑️ Deletando usuário do Auth...");
+      logger.debug("🗑️ Deletando usuário do Auth...");
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      console.log("✅ Usuário deletado");
+      logger.debug("✅ Usuário deletado");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      console.error("⚠️ Erro ao deletar usuário:", errorMessage);
+      logger.error("⚠️ Erro ao deletar usuário:", errorMessage);
     }
   }
 
-  console.log("✅ Rollback concluído");
+  logger.debug("✅ Rollback concluído");
 }
 
 // =====================================================
@@ -188,7 +189,7 @@ export async function POST(
     // 0. VERIFICAR ENV VARS
     // =====================================================
     if (!process.env.N8N_WEBHOOK_URL) {
-      console.error("❌ N8N_WEBHOOK_URL não configurada");
+      logger.error("❌ N8N_WEBHOOK_URL não configurada");
       throw new Error("Configuração do servidor incompleta");
     }
 
@@ -242,7 +243,7 @@ export async function POST(
     // 2. CRIAR AUTH.USER
     // =====================================================
     if (process.env.NODE_ENV === "development") {
-      console.log("📝 Criando usuário...");
+      logger.debug("📝 Criando usuário...");
     }
 
     const { data: authData, error: authError } =
@@ -267,7 +268,7 @@ export async function POST(
         );
       }
 
-      console.error("❌ Erro ao criar usuário:", authError);
+      logger.error("❌ Erro ao criar usuário:", authError);
       throw new Error("Falha ao criar usuário");
     }
 
@@ -278,14 +279,14 @@ export async function POST(
     createdUserId = authData.user.id;
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ Usuário criado:", createdUserId);
+      logger.debug("✅ Usuário criado:", createdUserId);
     }
 
     // =====================================================
     // 3. CRIAR TENANT
     // =====================================================
     if (process.env.NODE_ENV === "development") {
-      console.log("🏢 Criando tenant...");
+      logger.debug("🏢 Criando tenant...");
     }
 
     const tenantInsert: TenantInsert = {
@@ -300,20 +301,20 @@ export async function POST(
       .single();
 
     if (tenantError || !tenantData) {
-      console.error("❌ Erro ao criar tenant:", tenantError);
+      logger.error("❌ Erro ao criar tenant:", tenantError);
       throw new Error("Falha ao criar restaurante");
     }
 
     createdTenantId = tenantData.id;
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ Tenant criado:", createdTenantId);
+      logger.debug("✅ Tenant criado:", createdTenantId);
     }
 
     // =====================================================
     // 4. CRIAR PROFILE
     // =====================================================
     if (process.env.NODE_ENV === "development") {
-      console.log("👤 Criando profile...");
+      logger.debug("👤 Criando profile...");
     }
 
     const profileInsert: ProfileInsert = {
@@ -327,12 +328,12 @@ export async function POST(
       .insert(profileInsert);
 
     if (profileError) {
-      console.error("❌ Erro ao criar profile:", profileError);
+      logger.error("❌ Erro ao criar profile:", profileError);
       throw new Error("Falha ao criar perfil");
     }
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ Profile criado");
+      logger.debug("✅ Profile criado");
     }
 
     // =====================================================
@@ -359,22 +360,22 @@ export async function POST(
     });
 
     if (!connection.instance.qrcode) {
-      console.error("❌ QR Code não foi gerado após todas as tentativas");
+      logger.error("❌ QR Code não foi gerado após todas as tentativas");
       throw new Error(
         "QR Code não foi gerado. Verifique o dashboard da Uazapi."
       );
     }
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ QR Code gerado");
-      console.log("📏 QR Code length:", connection.instance.qrcode.length);
+      logger.debug("✅ QR Code gerado");
+      logger.debug("📏 QR Code length:", connection.instance.qrcode.length);
     }
 
     // =====================================================
     // 7. CONFIGURAR WEBHOOK
     // =====================================================
     if (process.env.NODE_ENV === "development") {
-      console.log("🔔 Configurando webhook...");
+      logger.debug("🔔 Configurando webhook...");
     }
 
     await configureWebhook({
@@ -384,14 +385,14 @@ export async function POST(
     });
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ Webhook configurado");
+      logger.debug("✅ Webhook configurado");
     }
 
     // =====================================================
     // 8. SALVAR NO BANCO
     // =====================================================
     if (process.env.NODE_ENV === "development") {
-      console.log("💾 Salvando instância...");
+      logger.debug("💾 Salvando instância...");
     }
 
     const apiKey = generateApiKey(createdTenantId);
@@ -416,13 +417,13 @@ export async function POST(
       .insert(instanceInsert);
 
     if (instanceError) {
-      console.error("❌ Erro ao salvar instância:", instanceError);
+      logger.error("❌ Erro ao salvar instância:", instanceError);
       throw new Error("Falha ao salvar instância");
     }
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ Instância salva");
-      console.log("🎉 Onboarding completo!");
+      logger.debug("✅ Instância salva");
+      logger.debug("🎉 Onboarding completo!");
     }
 
     // =====================================================
@@ -450,7 +451,7 @@ export async function POST(
     // =====================================================
     const errorMessage =
       error instanceof Error ? error.message : "Erro ao criar conta";
-    console.error("❌ Erro no onboarding:", errorMessage);
+    logger.error("❌ Erro no onboarding:", errorMessage);
 
     await rollbackOnboarding({
       userId: createdUserId,

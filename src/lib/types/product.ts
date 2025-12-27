@@ -46,7 +46,7 @@ export interface Category {
     id: string
     product_id: string
     name: string
-    price_modifier: number
+    price: number
     display_order: number
     is_available: boolean
     created_at: string
@@ -59,6 +59,27 @@ export interface Category {
   
   export interface VariationFormData {
     name: string
-    price_modifier: number
+    price: number
+    is_available: boolean
+  }
+
+  export interface ProductExtra {
+    id: string
+    product_id: string
+    name: string
+    price: number
+    display_order: number
+    is_available: boolean
+    created_at: string
+    updated_at: string
+  }
+  
+  export interface ProductWithExtras extends Product {
+    extras?: ProductExtra[]
+  }
+  
+  export interface ExtraFormData {
+    name: string
+    price: number
     is_available: boolean
   }

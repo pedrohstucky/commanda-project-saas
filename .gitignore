@@ -47,3 +47,6 @@ next-env.d.ts
 database/*.sql.backup
 database/dump.sql
 
+
+# Sentry Config File
+.sentryclirc

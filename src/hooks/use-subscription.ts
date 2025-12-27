@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { logger } from "@/lib/logger";
 import type {
   SubscriptionPlan,
   TenantSubscription,
@@ -36,7 +37,7 @@ export function useSubscription() {
         .single()
 
       if (profileError || !profile?.tenant_id) {
-        console.error("Erro ao carregar profile:", profileError)
+        logger.error("Erro ao carregar profile:", profileError)
         setSubscription(null)
         return
       }
@@ -48,14 +49,14 @@ export function useSubscription() {
         .single()
 
       if (error) {
-        console.error("Erro ao carregar assinatura:", error)
+        logger.error("Erro ao carregar assinatura:", error)
         setSubscription(null)
         return
       }
 
       setSubscription(data as TenantSubscription)
     } catch (error) {
-      console.error("Erro inesperado ao carregar assinatura:", error)
+      logger.error("Erro inesperado ao carregar assinatura:", error)
       setSubscription(null)
     } finally {
       setIsLoading(false)
@@ -71,13 +72,13 @@ export function useSubscription() {
         .order("price_monthly", { ascending: true })
 
       if (error) {
-        console.error("Erro ao carregar planos:", error)
+        logger.error("Erro ao carregar planos:", error)
         return
       }
 
       setPlans(data as SubscriptionPlanData[])
     } catch (error) {
-      console.error("Erro inesperado ao carregar planos:", error)
+      logger.error("Erro inesperado ao carregar planos:", error)
     }
   }, [supabase])
 

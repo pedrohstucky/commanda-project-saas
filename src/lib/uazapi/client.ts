@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 /**
  * Cliente Uazapi para gerenciar instâncias WhatsApp
  * Docs: https://docs.uazapi.com
@@ -67,8 +69,8 @@ export interface UazapiCreateInstanceParams {
 export async function createInstance(
   params: UazapiCreateInstanceParams
 ): Promise<UazapiInstance> {
-  console.log('🏗️ [Uazapi] Criando instância...')
-  console.log('📝 [Uazapi] Nome:', params.name)
+  logger.debug('🏗️ [Uazapi] Criando instância...')
+  logger.debug('📝 [Uazapi] Nome:', params.name)
   
   const response = await fetch(`${UAZAPI_API_URL}/instance/init`, {
     method: 'POST',
@@ -84,11 +86,11 @@ export async function createInstance(
     })
   })
 
-  console.log('📡 [Uazapi] Response status:', response.status)
+  logger.debug('📡 [Uazapi] Response status:', response.status)
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('❌ [Uazapi] Error response:', errorText)
+    logger.error('❌ [Uazapi] Error response:', errorText)
     
     try {
       const error = JSON.parse(errorText)
@@ -99,7 +101,7 @@ export async function createInstance(
   }
 
   const data = await response.json()
-  console.log('✅ [Uazapi] Instância criada:', data.instance?.id)
+  logger.debug('✅ [Uazapi] Instância criada:', data.instance?.id)
   
   return {
     id: data.instance.id,
@@ -126,8 +128,8 @@ export async function connectInstance(params: {
   instanceToken: string
   phone?: string
 }): Promise<UazapiConnectionResponse> {
-  console.log('🔗 [Uazapi] Conectando instância...')
-  console.log('📝 [Uazapi] Token:', params.instanceToken.slice(0, 20) + '...')
+  logger.debug('🔗 [Uazapi] Conectando instância...')
+  logger.debug('📝 [Uazapi] Token:', { token: params.instanceToken.slice(0, 20) + '...' })
   
   const response = await fetch(`${UAZAPI_API_URL}/instance/connect`, {
     method: 'POST',
@@ -140,11 +142,11 @@ export async function connectInstance(params: {
     })
   })
 
-  console.log('📡 [Uazapi] Response status:', response.status)
+  logger.debug('📡 [Uazapi] Response status:', response.status)
   
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('❌ [Uazapi] Error response:', errorText)
+    logger.error('❌ [Uazapi] Error response:', errorText)
     
     try {
       const error = JSON.parse(errorText)
@@ -155,7 +157,7 @@ export async function connectInstance(params: {
   }
 
   const data = await response.json()
-  console.log('📦 [Uazapi] Full response:', JSON.stringify(data, null, 2))
+  logger.debug('📦 [Uazapi] Full response:', { data: JSON.stringify(data, null, 2) })
   
   // ✅ TENTAR MÚLTIPLAS VARIAÇÕES DO QR CODE
   const qrcode = 
@@ -176,18 +178,18 @@ export async function connectInstance(params: {
     data.pairCode ||
     null
   
-  console.log('🔍 [Uazapi] QR Code encontrado:', qrcode ? 'SIM ✅' : 'NÃO ❌')
+  logger.debug('🔍 [Uazapi] QR Code encontrado:', qrcode ? 'SIM ✅' : 'NÃO ❌')
   
   if (qrcode) {
-    console.log('📏 [Uazapi] QR Code length:', qrcode.length)
-    console.log('🔤 [Uazapi] QR Code preview:', qrcode.slice(0, 50) + '...')
+    logger.debug('📏 [Uazapi] QR Code length:', qrcode.length)
+    logger.debug('🔤 [Uazapi] QR Code preview:', { qrcode: qrcode.slice(0, 50) + '...' })
   } else {
-    console.warn('⚠️ [Uazapi] QR Code NÃO encontrado na response')
-    console.warn('⚠️ [Uazapi] Campos disponíveis no instance:', Object.keys(data.instance || {}))
+    logger.warn('⚠️ [Uazapi] QR Code NÃO encontrado na response')
+    logger.warn('⚠️ [Uazapi] Campos disponíveis no instance:', Object.keys(data.instance || {}))
   }
   
   if (paircode) {
-    console.log('🔢 [Uazapi] Pair Code:', paircode)
+    logger.debug('🔢 [Uazapi] Pair Code:', paircode)
   }
   
   return {
@@ -221,7 +223,7 @@ export async function connectInstanceWithRetry(params: {
 }): Promise<UazapiConnectionResponse> {
   const maxRetries = params.maxRetries || 5
   
-  console.log('🔗 [Uazapi] Iniciando conexão com retry...')
+  logger.debug('🔗 [Uazapi] Iniciando conexão com retry...')
   
   // Primeira tentativa: chamar /connect
   const connection = await connectInstance({
@@ -231,15 +233,15 @@ export async function connectInstanceWithRetry(params: {
   
   // Se já tem QR Code, retorna
   if (connection.instance.qrcode) {
-    console.log('✅ [Uazapi] QR Code gerado imediatamente')
+    logger.debug('✅ [Uazapi] QR Code gerado imediatamente')
     return connection
   }
   
   // Se não tem, faz polling no status
-  console.log('⏳ [Uazapi] QR Code não gerado, iniciando polling...')
+  logger.debug('⏳ [Uazapi] QR Code não gerado, iniciando polling...')
   
   for (let i = 0; i < maxRetries; i++) {
-    console.log(`🔄 [Uazapi] Tentativa ${i + 1}/${maxRetries}...`)
+    logger.debug(`🔄 [Uazapi] Tentativa ${i + 1}/${maxRetries}...`)
     
     // Aguardar 2 segundos
     await new Promise(resolve => setTimeout(resolve, 2000))
@@ -249,22 +251,22 @@ export async function connectInstanceWithRetry(params: {
       const status = await getInstanceStatus(params.instanceToken)
       
       if (status.instance.qrcode) {
-        console.log('✅ [Uazapi] QR Code gerado após polling')
+        logger.debug('✅ [Uazapi] QR Code gerado após polling')
         return status
       }
     } catch (error) {
-      console.error('⚠️ [Uazapi] Erro ao buscar status:', error)
+      logger.error('⚠️ [Uazapi] Erro ao buscar status:', error)
     }
   }
   
-  console.warn('⚠️ [Uazapi] QR Code não foi gerado após todas as tentativas')
+  logger.warn('⚠️ [Uazapi] QR Code não foi gerado após todas as tentativas')
   
   // Última tentativa: endpoint específico de QR Code
-  console.log('🔄 [Uazapi] Tentando endpoint específico de QR Code...')
+  logger.debug('🔄 [Uazapi] Tentando endpoint específico de QR Code...')
   const qrcode = await fetchQRCode(params.instanceToken)
   
   if (qrcode) {
-    console.log('✅ [Uazapi] QR Code obtido via endpoint alternativo')
+    logger.debug('✅ [Uazapi] QR Code obtido via endpoint alternativo')
     connection.instance.qrcode = qrcode
   }
   
@@ -341,7 +343,7 @@ export async function fetchQRCode(instanceToken: string): Promise<string | null>
     })
 
     if (!response.ok) {
-      console.warn('⚠️ [Uazapi] /instance/qrcode não disponível')
+      logger.warn('⚠️ [Uazapi] /instance/qrcode não disponível')
       return null
     }
 
@@ -357,7 +359,7 @@ export async function fetchQRCode(instanceToken: string): Promise<string | null>
       null
     )
   } catch (error) {
-    console.error('❌ [Uazapi] Erro ao buscar QR Code:', error)
+    logger.error('❌ [Uazapi] Erro ao buscar QR Code:', error)
     return null
   }
 }
@@ -372,8 +374,8 @@ export async function configureWebhook(params: {
   webhookUrl: string
   events?: string[]
 }): Promise<UazapiWebhookConfig[]> {
-  console.log('🔔 [Uazapi] Configurando webhook...')
-  console.log('📝 [Uazapi] URL:', params.webhookUrl)
+  logger.debug('🔔 [Uazapi] Configurando webhook...')
+  logger.debug('📝 [Uazapi] URL:', params.webhookUrl)
   
   const response = await fetch(`${UAZAPI_API_URL}/webhook`, {
     method: 'POST',
@@ -397,11 +399,11 @@ export async function configureWebhook(params: {
     })
   })
 
-  console.log('📡 [Uazapi] Response status:', response.status)
+  logger.debug('📡 [Uazapi] Response status:', response.status)
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('❌ [Uazapi] Error response:', errorText)
+    logger.error('❌ [Uazapi] Error response:', errorText)
     
     try {
       const error = JSON.parse(errorText)
@@ -412,7 +414,7 @@ export async function configureWebhook(params: {
   }
 
   const data = await response.json()
-  console.log('✅ [Uazapi] Webhook configurado')
+  logger.debug('✅ [Uazapi] Webhook configurado')
   
   return data
 }
@@ -469,7 +471,7 @@ export async function disconnectInstance(instanceToken: string): Promise<void> {
  * Rota: DELETE /instance
  */
 export async function deleteInstance(instanceToken: string): Promise<void> {
-  console.log('🗑️ [Uazapi] Deletando instância...')
+  logger.debug('🗑️ [Uazapi] Deletando instância...')
   
   const response = await fetch(`${UAZAPI_API_URL}/instance`, {
     method: 'DELETE',
@@ -480,9 +482,9 @@ export async function deleteInstance(instanceToken: string): Promise<void> {
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('❌ [Uazapi] Error ao deletar:', errorText)
+    logger.error('❌ [Uazapi] Error ao deletar:', errorText)
     throw new Error(`Failed to delete instance: ${response.statusText}`)
   }
   
-  console.log('✅ [Uazapi] Instância deletada')
+  logger.debug('✅ [Uazapi] Instância deletada')
 }

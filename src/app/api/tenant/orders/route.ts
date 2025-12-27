@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { authenticateTenant } from "@/lib/auth/tenant";
-
+import { logger } from "@/lib/logger";
 /**
  * Request body para criar pedido
  */
@@ -14,19 +14,12 @@ interface CreateOrderRequest {
   delivery_address?: string;
   notes?: string;
   items: Array<{
-    product_id: string;
-    quantity: number;
-    variation_id?: string;
+    product_id: string | string[];
+    quantity: number | number[];
+    variation_id?: string | string[];
+    extras?: string[] | string[][];
   }>;
 }
-
-type ProductVariation = {
-  id: string;
-  product_id: string;
-  name: string;
-  price_modifier: number;
-  is_available: boolean;
-};
 
 /**
  * Response de sucesso
@@ -43,11 +36,103 @@ interface CreateOrderResponse {
 }
 
 /**
+ * Tipos do banco
+ */
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  is_available: boolean;
+}
+
+interface ProductVariation {
+  id: string;
+  product_id: string;
+  name: string;
+  price: number
+  is_available: boolean;
+}
+
+interface ProductExtra {
+  id: string;
+  product_id: string;
+  name: string;
+  price: number;
+  is_available: boolean;
+}
+
+interface NormalizedItem {
+  product_id: string;
+  quantity: number;
+  variation_id?: string;
+  extras?: string[];
+}
+
+interface OrderItemData {
+  product_id: string;
+  quantity: number;
+  product_price: number;
+  variation_id?: string;
+  extras: string[];
+}
+
+/**
+ * Normaliza items para formato padrão
+ */
+function normalizeItems(items: CreateOrderRequest["items"]): NormalizedItem[] {
+  const normalized: NormalizedItem[] = [];
+
+  for (const item of items) {
+    if (Array.isArray(item.product_id)) {
+      const productIds = item.product_id;
+      const quantities = Array.isArray(item.quantity)
+        ? item.quantity
+        : Array(productIds.length).fill(item.quantity);
+      const variationIds = Array.isArray(item.variation_id)
+        ? item.variation_id
+        : Array(productIds.length).fill(item.variation_id);
+      const extrasArray = Array.isArray(item.extras?.[0])
+        ? (item.extras as string[][])
+        : Array(productIds.length).fill(item.extras || []);
+
+      if (quantities.length !== productIds.length) {
+        throw new Error(
+          "Arrays de product_id e quantity devem ter o mesmo tamanho"
+        );
+      }
+
+      for (let i = 0; i < productIds.length; i++) {
+        normalized.push({
+          product_id: productIds[i],
+          quantity: quantities[i],
+          variation_id: variationIds[i] || undefined,
+          extras: Array.isArray(extrasArray[i]) ? extrasArray[i] : [],
+        });
+      }
+    } else {
+      normalized.push({
+        product_id: item.product_id,
+        quantity: Array.isArray(item.quantity)
+          ? item.quantity[0]
+          : item.quantity,
+        variation_id: Array.isArray(item.variation_id)
+          ? item.variation_id[0]
+          : item.variation_id,
+        extras: Array.isArray(item.extras)
+          ? Array.isArray(item.extras[0])
+            ? (item.extras[0] as string[])
+            : (item.extras as string[])
+          : [],
+      });
+    }
+  }
+
+  return normalized;
+}
+
+/**
  * POST /api/tenant/orders
  * Cria um novo pedido
- *
- * Usado por: n8n, integrações externas
- * Autenticação: API Key do tenant
  */
 export async function POST(
   request: NextRequest
@@ -57,7 +142,7 @@ export async function POST(
     const auth = await authenticateTenant(request);
 
     if (!auth.success) {
-      console.error("❌ Autenticação falhou:", auth.error);
+      logger.error("❌ Autenticação falhou:", auth.error);
       return NextResponse.json(
         { success: false, error: auth.error },
         { status: 401 }
@@ -65,11 +150,11 @@ export async function POST(
     }
 
     const { tenantId } = auth.tenant;
-    console.log("✅ Tenant autenticado:", tenantId);
+    logger.debug("✅ Tenant autenticado:", tenantId);
 
     // 2. Parsear body
     const body = (await request.json()) as CreateOrderRequest;
-    console.log("📥 Payload recebido:", JSON.stringify(body, null, 2));
+    logger.debug("📥 Payload recebido:", { body: JSON.stringify(body, null, 2) });
 
     // 3. Validar dados obrigatórios
     if (!body.customer?.phone) {
@@ -99,7 +184,6 @@ export async function POST(
       );
     }
 
-    // Validar endereço se for entrega
     if (body.delivery_type === "delivery" && !body.delivery_address) {
       return NextResponse.json(
         {
@@ -110,8 +194,28 @@ export async function POST(
       );
     }
 
-    // 4. Buscar produtos
-    const productIds = body.items.map((item) => item.product_id);
+    // 4. Normalizar items
+    let normalizedItems: NormalizedItem[];
+
+    try {
+      normalizedItems = normalizeItems(body.items);
+      logger.debug(
+        "📦 Items normalizados:",
+        JSON.stringify(normalizedItems, null, 2)
+      );
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            error instanceof Error ? error.message : "Erro ao processar items",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 5. Buscar produtos
+    const productIds = normalizedItems.map((item) => item.product_id);
 
     const { data: products, error: productsError } = await supabaseAdmin
       .from("products")
@@ -120,19 +224,19 @@ export async function POST(
       .in("id", productIds);
 
     if (productsError) {
-      console.error("❌ Erro ao buscar produtos:", productsError);
+      logger.error("❌ Erro ao buscar produtos:", productsError);
       throw productsError;
     }
 
-    if (!products || products.length !== productIds.length) {
+    if (!products || products.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Um ou mais produtos não foram encontrados" },
+        { success: false, error: "Nenhum produto encontrado" },
         { status: 400 }
       );
     }
 
-    // Buscar variações separadamente (se houver)
-    const variationIds = body.items
+    // 6. Buscar variações (se houver)
+    const variationIds = normalizedItems
       .filter((item) => item.variation_id)
       .map((item) => item.variation_id!);
 
@@ -142,22 +246,43 @@ export async function POST(
       const { data: variationsData, error: variationsError } =
         await supabaseAdmin
           .from("product_variations")
-          .select("id, product_id, name, price_modifier, is_available")
+          .select("id, product_id, name, price, is_available")
           .in("id", variationIds);
 
       if (variationsError) {
-        console.error("❌ Erro ao buscar variações:", variationsError);
+        logger.error("❌ Erro ao buscar variações:", variationsError);
         throw variationsError;
       }
 
-      variations = variationsData || [];
+      variations = (variationsData || []) as ProductVariation[];
     }
 
-    console.log(
-      `✅ ${products.length} produto(s) e ${variations.length} variação(ões) encontrados`
+    // 7. Buscar extras (se houver)
+    const extraIds = normalizedItems
+      .flatMap((item) => item.extras || [])
+      .filter(Boolean);
+
+    let extras: ProductExtra[] = [];
+
+    if (extraIds.length > 0) {
+      const { data: extrasData, error: extrasError } = await supabaseAdmin
+        .from("product_extras")
+        .select("id, product_id, name, price, is_available")
+        .in("id", extraIds);
+
+      if (extrasError) {
+        logger.error("❌ Erro ao buscar extras:", extrasError);
+        throw extrasError;
+      }
+
+      extras = (extrasData || []) as ProductExtra[];
+    }
+
+    logger.debug(
+      `✅ ${products.length} produto(s), ${variations.length} variação(ões) e ${extras.length} extra(s) encontrados`
     );
 
-    // Verificar se todos estão disponíveis
+    // 8. Verificar disponibilidade
     const unavailable = products.filter((p) => !p.is_available);
     if (unavailable.length > 0) {
       return NextResponse.json(
@@ -171,19 +296,17 @@ export async function POST(
       );
     }
 
-    // 5. Calcular total COM VARIAÇÕES
-    const productsMap = new Map(products.map((p) => [p.id, p]));
+    // 9. Calcular total COM VARIAÇÕES E EXTRAS
+    const productsMap = new Map(
+      (products as Product[]).map((p) => [p.id, p])
+    );
     const variationsMap = new Map(variations.map((v) => [v.id, v]));
+    const extrasMap = new Map(extras.map((e) => [e.id, e]));
 
     let totalAmount = 0;
-    const orderItems: Array<{
-      product_id: string;
-      quantity: number;
-      product_price: number;
-      variation_id?: string;
-    }> = [];
+    const orderItems: OrderItemData[] = [];
 
-    for (const item of body.items) {
+    for (const item of normalizedItems) {
       const product = productsMap.get(item.product_id);
       if (!product) {
         return NextResponse.json(
@@ -198,7 +321,7 @@ export async function POST(
       let finalPrice = product.price;
       let variationId: string | undefined = undefined;
 
-      // Se tem variação, buscar e aplicar modificador
+      // Aplicar variação
       if (item.variation_id) {
         const variation = variationsMap.get(item.variation_id);
 
@@ -232,17 +355,67 @@ export async function POST(
           );
         }
 
-        finalPrice += variation.price_modifier;
+        // ✅ MUDADO: usar preço direto da variação
+        finalPrice = variation.price;
         variationId = variation.id;
 
-        console.log(
-          `📏 Variação aplicada: ${product.name} ${variation.name} (${
-            variation.price_modifier >= 0 ? "+" : ""
-          }R$ ${variation.price_modifier.toFixed(2)})`
+        logger.debug(
+          `📏 Variação aplicada: ${product.name} ${variation.name} (R$ ${variation.price.toFixed(2)})`
         );
       }
 
-      const subtotal = finalPrice * item.quantity;
+      // Calcular preço dos extras
+      let extrasPrice = 0;
+      const validExtras: string[] = [];
+
+      if (item.extras && item.extras.length > 0) {
+        for (const extraId of item.extras) {
+          const extra = extrasMap.get(extraId);
+
+          if (!extra) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Extra ${extraId} não encontrado`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (extra.product_id !== product.id) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Extra "${extra.name}" não pertence ao produto ${product.name}`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (!extra.is_available) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Extra "${extra.name}" está indisponível`,
+              },
+              { status: 400 }
+            );
+          }
+
+          extrasPrice += extra.price;
+          validExtras.push(extra.id);
+
+          logger.debug(
+            `➕ Extra adicionado: ${extra.name} (+R$ ${extra.price.toFixed(
+              2
+            )})`
+          );
+        }
+      }
+
+      // Preço final = produto/variação + extras
+      const itemPrice = finalPrice + extrasPrice;
+      const subtotal = itemPrice * item.quantity;
       totalAmount += subtotal;
 
       orderItems.push({
@@ -250,12 +423,23 @@ export async function POST(
         product_price: finalPrice,
         quantity: item.quantity,
         variation_id: variationId,
+        extras: validExtras,
       });
+
+      // ✅ MUDADO: log mais claro
+      const variationName = item.variation_id ? ` (${variationsMap.get(item.variation_id)?.name})` : '';
+      logger.debug(
+        `💵 Item: ${product.name}${variationName} - Preço: R$ ${finalPrice.toFixed(
+          2
+        )} + Extras: R$ ${extrasPrice.toFixed(2)} = R$ ${itemPrice.toFixed(
+          2
+        )} x ${item.quantity} = R$ ${subtotal.toFixed(2)}`
+      );
     }
 
-    console.log(`💰 Total calculado: R$ ${totalAmount.toFixed(2)}`);
+    logger.debug(`💰 Total calculado: R$ ${totalAmount.toFixed(2)}`);
 
-    // 6. Buscar owner do tenant para usar como created_by
+    // 10. Buscar owner do tenant
     const { data: tenant } = await supabaseAdmin
       .from("tenants")
       .select("owner_id")
@@ -263,11 +447,11 @@ export async function POST(
       .single();
 
     if (!tenant?.owner_id) {
-      console.error("❌ Tenant owner não encontrado");
+      logger.error("❌ Tenant owner não encontrado");
       throw new Error("Tenant owner não encontrado");
     }
 
-    // 7. Criar pedido
+    // 11. Criar pedido
     const orderData = {
       tenant_id: tenantId,
       customer_name: body.customer.name || null,
@@ -281,7 +465,7 @@ export async function POST(
       created_by: tenant.owner_id,
     };
 
-    console.log(
+    logger.debug(
       "💾 Dados do pedido a serem salvos:",
       JSON.stringify(orderData, null, 2)
     );
@@ -295,13 +479,13 @@ export async function POST(
       .single();
 
     if (orderError || !order) {
-      console.error("❌ Erro ao criar pedido:", orderError);
+      logger.error("❌ Erro ao criar pedido:", orderError);
       throw orderError;
     }
 
-    console.log("✅ Pedido criado no banco:", JSON.stringify(order, null, 2));
+    logger.debug("✅ Pedido criado no banco:", { order: JSON.stringify(order, null, 2) });
 
-    // 8. Criar itens do pedido COM VARIAÇÕES
+    // 12. Criar itens do pedido
     const itemsToInsert = orderItems.map((item) => ({
       order_id: order.id,
       product_id: item.product_id,
@@ -310,26 +494,60 @@ export async function POST(
       variation_id: item.variation_id ?? undefined,
     }));
 
-    console.log(`📦 Inserindo ${itemsToInsert.length} item(ns)...`);
+    logger.debug(`📦 Inserindo ${itemsToInsert.length} item(ns)...`);
 
-    const { error: itemsError } = await supabaseAdmin
+    const { data: insertedItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
-      .insert(itemsToInsert);
+      .insert(itemsToInsert)
+      .select("id");
 
-    if (itemsError) {
-      console.error("❌ Erro ao criar itens:", itemsError);
-      // Tentar deletar pedido criado
+    if (itemsError || !insertedItems) {
+      logger.error("❌ Erro ao criar itens:", itemsError);
       await supabaseAdmin.from("orders").delete().eq("id", order.id);
       throw itemsError;
     }
 
-    console.log(`✅ Pedido ${order.id} criado com sucesso via API`);
-    console.log(
+    // 13. Criar extras dos itens
+    const extrasToInsert: Array<{
+      order_item_id: string;
+      extra_id: string;
+    }> = [];
+
+    for (let i = 0; i < orderItems.length; i++) {
+      const item = orderItems[i];
+      const orderItemId = insertedItems[i].id;
+
+      if (item.extras && item.extras.length > 0) {
+        for (const extraId of item.extras) {
+          extrasToInsert.push({
+            order_item_id: orderItemId,
+            extra_id: extraId,
+          });
+        }
+      }
+    }
+
+    if (extrasToInsert.length > 0) {
+      logger.debug(`➕ Inserindo ${extrasToInsert.length} extra(s)...`);
+
+      const { error: extrasError } = await supabaseAdmin
+        .from("order_item_extras")
+        .insert(extrasToInsert);
+
+      if (extrasError) {
+        logger.error("❌ Erro ao criar extras:", extrasError);
+        await supabaseAdmin.from("orders").delete().eq("id", order.id);
+        throw extrasError;
+      }
+    }
+
+    logger.debug(`✅ Pedido ${order.id} criado com sucesso via API`);
+    logger.debug(
       `📱 Cliente: ${order.customer_name || "Sem nome"} (${
         order.customer_phone
       })`
     );
-    console.log(
+    logger.debug(
       `📍 ${
         order.delivery_type === "delivery"
           ? `Entrega: ${order.delivery_address}`
@@ -337,7 +555,7 @@ export async function POST(
       }`
     );
 
-    // 9. Retornar sucesso
+    // 14. Retornar sucesso
     return NextResponse.json(
       {
         success: true,
@@ -351,7 +569,7 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    console.error("❌ Erro na API de pedidos:", error);
+    logger.error("❌ Erro na API de pedidos:", error);
 
     return NextResponse.json(
       {
@@ -366,15 +584,9 @@ export async function POST(
 /**
  * GET /api/tenant/orders
  * Lista pedidos do tenant
- *
- * Query params:
- * - status: 'pending' | 'preparing' | 'completed' | 'cancelled'
- * - limit: number (default: 50, max: 100)
- * - offset: number (default: 0)
  */
 export async function GET(request: NextRequest) {
   try {
-    // 1. Autenticar tenant
     const auth = await authenticateTenant(request);
 
     if (!auth.success) {
@@ -386,13 +598,11 @@ export async function GET(request: NextRequest) {
 
     const { tenantId } = auth.tenant;
 
-    // 2. Parsear query params
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    // 3. Montar query COM VARIAÇÕES
     let query = supabaseAdmin
       .from("orders")
       .select(
@@ -417,7 +627,13 @@ export async function GET(request: NextRequest) {
           variation_name,
           quantity,
           product_price,
-          subtotal
+          subtotal,
+          order_item_extras (
+            id,
+            extra_id,
+            extra_name,
+            extra_price
+          )
         )
       `,
         { count: "exact" }
@@ -426,7 +642,6 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // Filtrar por status se fornecido
     if (
       status &&
       ["pending", "preparing", "completed", "cancelled"].includes(status)
@@ -451,7 +666,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("❌ Erro ao listar pedidos:", error);
+    logger.error("❌ Erro ao listar pedidos:", error);
 
     return NextResponse.json(
       {

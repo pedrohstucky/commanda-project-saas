@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+import { logger } from "@/lib/logger";
 // =====================================================
 // TYPES
 // =====================================================
@@ -62,20 +63,20 @@ export async function POST(
     // 1. RAW BODY
     // =====================================================
     const rawBody = await request.text()
-    console.log('📦 [Webhook] Raw body:', rawBody)
+    logger.debug('📦 [Webhook] Raw body:', rawBody)
 
     let payload: UazapiWebhookPayload
     try {
       payload = JSON.parse(rawBody)
     } catch (err) {
-      console.error('❌ JSON inválido:', err)
+      logger.error('❌ JSON inválido:', err)
       return NextResponse.json(
         { success: false, error: 'JSON inválido' },
         { status: 400 }
       )
     }
 
-    console.log(
+    logger.debug(
       '📦 [Webhook] Payload parseado:',
       JSON.stringify(payload, null, 2)
     )
@@ -92,7 +93,7 @@ export async function POST(
 
     // Formato n8n
     if (payload.instanceToken) {
-      console.log('✅ Formato: n8n enriquecido')
+      logger.debug('✅ Formato: n8n enriquecido')
 
       instanceToken = payload.instanceToken
       status = payload.status ?? null
@@ -104,7 +105,7 @@ export async function POST(
 
     // Formato Uazapi original
     else if (payload.token && payload.instance) {
-      console.log('✅ Formato: Uazapi original')
+      logger.debug('✅ Formato: Uazapi original')
 
       instanceToken = payload.token
       status = payload.instance.status
@@ -118,7 +119,7 @@ export async function POST(
           extractPhoneFromJid(payload.instance.jid) ?? phoneNumber
       }
     } else {
-      console.error('❌ Payload não reconhecido')
+      logger.error('❌ Payload não reconhecido')
       return NextResponse.json(
         {
           success: false,
@@ -149,7 +150,7 @@ export async function POST(
         .single()
 
     if (instanceError || !instanceData) {
-      console.error('❌ Instância não encontrada:', instanceError)
+      logger.error('❌ Instância não encontrada:', instanceError)
       return NextResponse.json(
         { success: false, error: 'Instância não encontrada' },
         { status: 404 }
@@ -225,7 +226,7 @@ export async function POST(
         .single()
 
     if (updateError) {
-      console.error('❌ Erro ao atualizar:', updateError)
+      logger.error('❌ Erro ao atualizar:', updateError)
       return NextResponse.json(
         {
           success: false,
@@ -245,7 +246,7 @@ export async function POST(
       { status: 200 }
     )
   } catch (error) {
-    console.error('❌ Erro geral:', error)
+    logger.error('❌ Erro geral:', error)
     return NextResponse.json(
       {
         success: false,

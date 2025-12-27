@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import Image from "next/image"
 
+import { logger } from "@/lib/logger";
 interface WhatsAppInstance {
   id: string
   status: 'disconnected' | 'connecting' | 'connected'
@@ -56,7 +57,7 @@ export default function WhatsAppOnboardingPage() {
         setTimeout(() => router.push('/onboarding/success'), 500)
       }
     } catch (err) {
-      console.error('❌ [WhatsApp] Erro:', err)
+      logger.error('❌ [WhatsApp] Erro:', err)
       setError('Erro ao carregar instância')
     } finally {
       setIsLoading(false)

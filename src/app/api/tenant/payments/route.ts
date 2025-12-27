@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { authenticateTenant } from '@/lib/auth/tenant'
 
+import { logger } from "@/lib/logger";
 interface CreatePaymentRequest {
   order_id: string
   payment_method: 'cash' | 'card' | 'pix'
@@ -101,7 +102,7 @@ export async function POST(
       .single()
 
     if (paymentError || !payment) {
-      console.error('❌ Erro ao criar pagamentos:', paymentError)
+      logger.error('❌ Erro ao criar pagamentos:', paymentError)
       throw paymentError
     }
 
@@ -112,7 +113,7 @@ export async function POST(
       .eq('id', body.order_id)
 
     if (updateError) {
-      console.error('⚠️ Erro ao atualizar status do pedido:', updateError)
+      logger.error('⚠️ Erro ao atualizar status do pedido:', updateError)
     }
 
     // 8. Retornar sucesso
@@ -126,7 +127,7 @@ export async function POST(
     }, { status: 201 })
 
   } catch (error) {
-    console.error('❌ Erro na API de pagamentos:', error)
+    logger.error('❌ Erro na API de pagamentos:', error)
     
     return NextResponse.json(
       {

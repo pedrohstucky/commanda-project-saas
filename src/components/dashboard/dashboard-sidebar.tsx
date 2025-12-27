@@ -20,7 +20,9 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { PendingOrdersBadge } from "./pending-orders-badge"
+import { Globe } from "lucide-react"
 
+import { logger } from "@/lib/logger";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Pedidos", href: "/dashboard/orders", icon: ClipboardList, showBadge: true },
@@ -28,6 +30,7 @@ const navigation = [
   { name: "Categorias", href: "/dashboard/products/categories", icon: FolderOpen }, // ← NOVO
   { name: "WhatsApp", href: "/onboarding/whatsapp", icon: MessageCircle },
   { name: "Configurações", href: "/dashboard/settings", icon: Settings },
+  { name: "Cardápio Digital", href: "/dashboard/menu", icon: Globe },
 ]
 
 interface DashboardSidebarProps {
@@ -66,7 +69,7 @@ export function DashboardSidebar({
       .maybeSingle()
   
     if (error) {
-      console.error("Erro ao carregar WhatsApp status:", error)
+      logger.error("Erro ao carregar WhatsApp status:", error)
       return
     }
   
@@ -101,7 +104,7 @@ export function DashboardSidebar({
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          console.log("✅ Realtime WhatsApp Sidebar conectado")
+          logger.debug("✅ Realtime WhatsApp Sidebar conectado")
         }
       })
   

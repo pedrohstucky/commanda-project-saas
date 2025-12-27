@@ -9,12 +9,13 @@ import {
 import { generateApiKey } from "@/lib/utils";
 import type { Database } from "@/lib/types/database";
 
+import { logger } from "@/lib/logger";
 type WhatsAppInstanceInsert =
   Database["public"]["Tables"]["whatsapp_instances"]["Insert"];
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("=== CREATE INSTANCE START ===");
+    logger.debug("=== CREATE INSTANCE START ===");
     
     const body = await request.json().catch(() => ({}));
     const { tenantId } = body;
@@ -22,26 +23,26 @@ export async function POST(request: NextRequest) {
     // Verificar se é chamada do Inngest
     const inngestSecret = request.headers.get("x-inngest-secret");
     
-    console.log("Headers recebidos:", {
+    logger.debug("Headers recebidos:", {
       inngestSecret: inngestSecret ? "presente" : "ausente",
       expectedSecret: process.env.INNGEST_INTERNAL_SECRET ? "configurado" : "não configurado"
     });
     
-    console.log("Body recebido:", { tenantId });
+    logger.debug("Body recebido:", { tenantId });
 
     let finalTenantId: string;
 
     if (inngestSecret === process.env.INNGEST_INTERNAL_SECRET && tenantId) {
       // Chamada do Inngest - usar tenantId do body
       finalTenantId = tenantId;
-      console.log("🔧 Chamada do Inngest para tenant:", finalTenantId);
+      logger.debug("🔧 Chamada do Inngest para tenant:", finalTenantId);
     } else {
       // Chamada normal - verificar auth
       const supabase = await createClient();
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
-        console.log("❌ Erro de autenticação:", authError);
+        logger.debug("❌ Erro de autenticação:", authError);
         return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
       }
 
@@ -52,14 +53,14 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (!profile) {
-        console.log("❌ Perfil não encontrado");
+        logger.debug("❌ Perfil não encontrado");
         return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
       }
 
       finalTenantId = profile.tenant_id;
     }
 
-    console.log("Tenant ID final:", finalTenantId);
+    logger.debug("Tenant ID final:", finalTenantId);
 
     // Verificar se subscription está ativa
     const { data: tenant } = await supabaseAdmin
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
       .eq("id", finalTenantId)
       .single();
 
-    console.log("Tenant data:", tenant);
+    logger.debug("Tenant data:", tenant);
 
     if (tenant?.subscription_status !== 'active') {
       return NextResponse.json({ 
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingInstance) {
-      console.log("Deletando instância antiga...");
+      logger.debug("Deletando instância antiga...");
       await supabaseAdmin
         .from("whatsapp_instances")
         .delete()
@@ -93,14 +94,14 @@ export async function POST(request: NextRequest) {
 
     // Verificar ENV vars
     if (!process.env.N8N_WEBHOOK_URL) {
-      console.error("❌ N8N_WEBHOOK_URL não configurada");
+      logger.error("❌ N8N_WEBHOOK_URL não configurada");
       return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 });
     }
 
     // Criar nome da instância
     const instanceName = `tenant_${finalTenantId.substring(0, 8)}`;
     
-    console.log("📱 Criando instância Uazapi:", instanceName);
+    logger.debug("📱 Criando instância Uazapi:", instanceName);
 
     // Criar instância na Uazapi
     const instance = await createInstance({
@@ -110,10 +111,10 @@ export async function POST(request: NextRequest) {
       adminField02: "system",
     });
 
-    console.log("✅ Instância criada:", instance.id);
+    logger.debug("✅ Instância criada:", instance.id);
 
     // Conectar instância e gerar QR Code
-    console.log("🔗 Conectando instância...");
+    logger.debug("🔗 Conectando instância...");
     
     const connection = await connectInstanceWithRetry({
       instanceToken: instance.token,
@@ -121,14 +122,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!connection.instance.qrcode) {
-      console.error("❌ QR Code não foi gerado");
+      logger.error("❌ QR Code não foi gerado");
       throw new Error("QR Code não foi gerado. Tente novamente.");
     }
 
-    console.log("✅ QR Code gerado");
+    logger.debug("✅ QR Code gerado");
 
     // Configurar webhook
-    console.log("🔔 Configurando webhook...");
+    logger.debug("🔔 Configurando webhook...");
     
     await configureWebhook({
       instanceToken: instance.token,
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       events: ["messages", "connection"],
     });
 
-    console.log("✅ Webhook configurado");
+    logger.debug("✅ Webhook configurado");
 
     // Gerar API Key
     const apiKey = generateApiKey(finalTenantId);
@@ -164,15 +165,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("❌ Erro ao salvar instância:", insertError);
+      logger.error("❌ Erro ao salvar instância:", insertError);
       return NextResponse.json(
         { error: "Erro ao salvar instância no banco", details: insertError },
         { status: 500 }
       );
     }
 
-    console.log("✅ Instância salva no banco");
-    console.log("=== CREATE INSTANCE END ===");
+    logger.debug("✅ Instância salva no banco");
+    logger.debug("=== CREATE INSTANCE END ===");
 
     return NextResponse.json({
       success: true,
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("❌ Erro ao criar instância:", error);
+    logger.error("❌ Erro ao criar instância:", error);
     return NextResponse.json(
       { error: "Erro ao criar instância", details: String(error) },
       { status: 500 }

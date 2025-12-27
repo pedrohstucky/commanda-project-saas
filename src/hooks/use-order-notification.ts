@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
+import { logger } from "@/lib/logger";
 interface UseOrderNotificationOptions {
   enabled?: boolean
   soundEnabled?: boolean
@@ -49,7 +50,7 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
     if (soundEnabled && audioRef.current) {
       audioRef.current.currentTime = 0
       audioRef.current.play().catch(err => {
-        console.warn('Não foi possível tocar som:', err)
+        logger.warn('Não foi possível tocar som:', err)
       })
     }
   }, [soundEnabled])
@@ -108,9 +109,9 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
           .eq('status', 'pending')
 
         setPendingCount(count || 0)
-        console.log(`📊 Contagem inicial de pedidos pending: ${count || 0}`)
+        logger.debug(`📊 Contagem inicial de pedidos pending: ${count || 0}`)
       } catch (error) {
-        console.error('Erro ao carregar dados iniciais:', error)
+        logger.error('Erro ao carregar dados iniciais:', error)
       } finally {
         setIsLoading(false)
       }
@@ -125,7 +126,7 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
   useEffect(() => {
     if (!enabled || !tenantId) return
 
-    console.log(`🔌 Conectando Realtime para tenant: ${tenantId}`)
+    logger.debug(`🔌 Conectando Realtime para tenant: ${tenantId}`)
 
     const channel = supabase
       .channel(`orders-notification-${tenantId}`)
@@ -146,16 +147,16 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
             total_amount: number
           }
 
-          console.log('🆕 Novo pedido detectado:', newOrder)
+          logger.debug('🆕 Novo pedido detectado:', newOrder)
 
           // Só notifica se for pending
           if (newOrder.status === 'pending') {
-            console.log('🔔 Novo pedido PENDING - incrementando contador')
+            logger.debug('🔔 Novo pedido PENDING - incrementando contador')
 
             // Incrementar contador
             setPendingCount(prev => {
               const newCount = prev + 1
-              console.log(`📊 Contador atualizado: ${prev} → ${newCount}`)
+              logger.debug(`📊 Contador atualizado: ${prev} → ${newCount}`)
               return newCount
             })
 
@@ -192,7 +193,7 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
           const updatedOrder = payload.new as { id: string, status: string }
           const oldOrder = payload.old as { id: string, status: string }
 
-          console.log('🔄 Pedido atualizado:', {
+          logger.debug('🔄 Pedido atualizado:', {
             id: updatedOrder.id,
             oldStatus: oldOrder.status,
             newStatus: updatedOrder.status
@@ -200,30 +201,30 @@ export function useOrderNotification(options: UseOrderNotificationOptions = {}) 
 
           // Se saiu de pending, decrementar
           if (oldOrder.status === 'pending' && updatedOrder.status !== 'pending') {
-            console.log('📉 Pedido saiu de pending - decrementando contador')
+            logger.debug('📉 Pedido saiu de pending - decrementando contador')
             setPendingCount(prev => {
               const newCount = Math.max(0, prev - 1)
-              console.log(`📊 Contador atualizado: ${prev} → ${newCount}`)
+              logger.debug(`📊 Contador atualizado: ${prev} → ${newCount}`)
               return newCount
             })
           }
           // Se entrou em pending, incrementar
           else if (oldOrder.status !== 'pending' && updatedOrder.status === 'pending') {
-            console.log('📈 Pedido entrou em pending - incrementando contador')
+            logger.debug('📈 Pedido entrou em pending - incrementando contador')
             setPendingCount(prev => {
               const newCount = prev + 1
-              console.log(`📊 Contador atualizado: ${prev} → ${newCount}`)
+              logger.debug(`📊 Contador atualizado: ${prev} → ${newCount}`)
               return newCount
             })
           }
         }
       )
       .subscribe((status) => {
-        console.log(`📡 Realtime status: ${status}`)
+        logger.debug(`📡 Realtime status: ${status}`)
       })
 
     return () => {
-      console.log('🔌 Desconectando Realtime')
+      logger.debug('🔌 Desconectando Realtime')
       supabase.removeChannel(channel)
     }
   }, [supabase, enabled, tenantId, playSound, showDesktopNotification])

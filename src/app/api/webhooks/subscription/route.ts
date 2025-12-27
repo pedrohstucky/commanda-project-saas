@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inngest } from "@/lib/inngest/client";
 
+import { logger } from "@/lib/logger";
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    console.log("📨 Webhook recebido:", payload);
+    logger.debug("📨 Webhook recebido:", payload);
 
     const { table, record, old_record } = payload;
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    console.log(`🔄 Status mudou: ${oldStatus} → ${newStatus}`);
+    logger.debug(`🔄 Status mudou: ${oldStatus} → ${newStatus}`);
 
     // Disparar eventos Inngest baseado APENAS no novo status
     if (oldStatus === "active" && newStatus === "expired") {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
           expiredAt: new Date().toISOString(),
         },
       });
-      console.log("✅ Evento 'subscription/expired' enviado");
+      logger.debug("✅ Evento 'subscription/expired' enviado");
     } 
     else if (oldStatus === "expired" && newStatus === "cancelled") {
       // Subscription cancelada
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
           cancelledAt: new Date().toISOString(),
         },
       });
-      console.log("✅ Evento 'subscription/cancelled' enviado");
+      logger.debug("✅ Evento 'subscription/cancelled' enviado");
     } 
     else if ((oldStatus === "expired" || oldStatus === "cancelled") && newStatus === "active") {
       // Subscription reativada
@@ -62,10 +63,10 @@ export async function POST(request: NextRequest) {
           reactivatedAt: new Date().toISOString(),
         },
       });
-      console.log("✅ Evento 'subscription/reactivated' enviado");
+      logger.debug("✅ Evento 'subscription/reactivated' enviado");
     }
     else {
-      console.log(`⚠️ Mudança de status não mapeada: ${oldStatus} → ${newStatus}`);
+      logger.debug(`⚠️ Mudança de status não mapeada: ${oldStatus} → ${newStatus}`);
     }
 
     return NextResponse.json({ 
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("❌ Erro no webhook:", error);
+    logger.error("❌ Erro no webhook:", error);
     return NextResponse.json(
       { error: "Erro ao processar webhook" },
       { status: 500 }

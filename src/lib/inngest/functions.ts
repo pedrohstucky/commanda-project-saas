@@ -1,5 +1,6 @@
 import { inngest } from "./client";
 
+import { logger } from "@/lib/logger";
 // =====================================================
 // FUNÇÃO: Desconectar WhatsApp ao expirar
 // =====================================================
@@ -13,7 +14,7 @@ export const disconnectWhatsApp = inngest.createFunction(
       const { tenantId } = event.data;
   
       await step.run("disconnect-whatsapp-uazapi", async () => {
-        console.log(`🔌 Desconectando WhatsApp do tenant: ${tenantId}`);
+        logger.debug(`🔌 Desconectando WhatsApp do tenant: ${tenantId}`);
   
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/disconnect`,
@@ -33,7 +34,7 @@ export const disconnectWhatsApp = inngest.createFunction(
         }
   
         const result = await response.json();
-        console.log(`✅ WhatsApp desconectado:`, result);
+        logger.debug(`✅ WhatsApp desconectado:`, result);
         return result;
       });
   
@@ -54,7 +55,7 @@ export const deleteWhatsAppInstance = inngest.createFunction(
     const { tenantId } = event.data;
 
     await step.run("delete-whatsapp-instance", async () => {
-      console.log(`🗑️ Deletando instância WhatsApp do tenant: ${tenantId}`);
+      logger.debug(`🗑️ Deletando instância WhatsApp do tenant: ${tenantId}`);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/delete`,
@@ -74,7 +75,7 @@ export const deleteWhatsAppInstance = inngest.createFunction(
       }
 
       const result = await response.json();
-      console.log(`✅ Instância deletada:`, result);
+      logger.debug(`✅ Instância deletada:`, result);
       return result;
     });
 
@@ -97,7 +98,7 @@ export const reconnectWhatsApp = inngest.createFunction(
       if (wasDeleted) {
         // Se foi deletado, criar nova instância
         await step.run("create-new-instance", async () => {
-          console.log(`🆕 Criando nova instância para tenant: ${tenantId}`);
+          logger.debug(`🆕 Criando nova instância para tenant: ${tenantId}`);
   
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/create`,
@@ -117,13 +118,13 @@ export const reconnectWhatsApp = inngest.createFunction(
           }
   
           const result = await response.json();
-          console.log(`✅ Nova instância criada:`, result);
+          logger.debug(`✅ Nova instância criada:`, result);
           return result;
         });
       } else {
         // Se não foi deletado, apenas gerar novo QR Code
         await step.run("generate-qrcode", async () => {
-          console.log(`📱 Gerando QR Code para tenant: ${tenantId}`);
+          logger.debug(`📱 Gerando QR Code para tenant: ${tenantId}`);
   
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/qrcode`,
@@ -143,7 +144,7 @@ export const reconnectWhatsApp = inngest.createFunction(
           }
   
           const result = await response.json();
-          console.log(`✅ QR Code gerado:`, result);
+          logger.debug(`✅ QR Code gerado:`, result);
           return result;
         });
       }

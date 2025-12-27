@@ -1,29 +1,28 @@
 "use client"
 
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, ImageIcon, Layers } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Edit, Trash2, ImageIcon, Layers, Plus } from "lucide-react"
 import type { Product } from "@/lib/types/product"
-import Image from "next/image"
+import Image from 'next/image'
 
 interface ProductCardProps {
   product: Product
   onEdit?: (product: Product) => void
   onDelete?: (productId: string) => void
   onManageVariations?: (product: Product) => void
+  onManageExtras?: (product: Product) => void
 }
 
-/**
- * Card de produto para listagem
- */
-export function ProductCard({ 
-  product, 
-  onEdit, 
+export function ProductCard({
+  product,
+  onEdit,
   onDelete,
-  onManageVariations 
+  onManageVariations,
+  onManageExtras,
 }: ProductCardProps) {
-  const formatCurrency = (value: number) => {
+  const formatPrice = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
@@ -32,53 +31,51 @@ export function ProductCard({
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      {/* Imagem */}
-      <div className="relative aspect-video bg-muted">
+      {/* Imagem do produto */}
+      <div className="relative aspect-video w-full bg-muted">
         {product.image_url ? (
           <Image
-            src={product.image_url}
+            src={product.image_url || '/placeholder.png'}
             alt={product.name}
             fill
             className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            loading="lazy"
           />
         ) : (
           <div className="flex items-center justify-center h-full">
             <ImageIcon className="h-12 w-12 text-muted-foreground" />
           </div>
         )}
-        
-        {/* Badge de disponibilidade */}
-        <div className="absolute top-2 right-2">
-          <Badge variant={product.is_available ? "default" : "secondary"}>
-            {product.is_available ? "Disponível" : "Indisponível"}
-          </Badge>
-        </div>
       </div>
 
-      <CardContent className="p-4">
-        {/* Categoria */}
-        {product.category && (
-          <p className="text-xs text-muted-foreground mb-2">
-            {product.category.name}
-          </p>
-        )}
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold line-clamp-1">{product.name}</h3>
+            {product.description && (
+              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                {product.description}
+              </p>
+            )}
+          </div>
+          <Badge variant={product.is_available ? "default" : "secondary"}>
+            {product.is_available ? "Ativo" : "Inativo"}
+          </Badge>
+        </div>
+      </CardHeader>
 
-        {/* Nome */}
-        <h3 className="font-semibold text-lg mb-2 line-clamp-1">
-          {product.name}
-        </h3>
-
-        {/* Descrição */}
-        {product.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-            {product.description}
-          </p>
-        )}
-
-        {/* Preço */}
-        <p className="text-2xl font-bold text-primary">
-          {formatCurrency(product.price)}
-        </p>
+      <CardContent className="pb-3">
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-bold text-primary">
+            {formatPrice(product.price)}
+          </span>
+          {product.category && (
+            <span className="text-sm text-muted-foreground">
+              • {product.category.name}
+            </span>
+          )}
+        </div>
       </CardContent>
 
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
@@ -117,6 +114,19 @@ export function ProductCard({
           <Layers className="h-4 w-4 sm:mr-2" />
           <span className="hidden sm:inline">Gerenciar Variações</span>
           <span className="sm:hidden">Variações</span>
+        </Button>
+
+        {/* Linha 3: Extras */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => onManageExtras?.(product)}
+          title="Gerenciar extras"
+        >
+          <Plus className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Gerenciar Extras</span>
+          <span className="sm:hidden">Extras</span>
         </Button>
       </CardFooter>
     </Card>

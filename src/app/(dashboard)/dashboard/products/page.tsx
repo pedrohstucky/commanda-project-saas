@@ -1,53 +1,75 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { createBrowserSupabaseClient } from "@/lib/supabase/client"
-import { ProductCard } from "@/components/products/product-card"
-import { ProductFilters } from "@/components/products/product-filters"
-import { ProductDialog } from "@/components/products/product-dialog"
-import { ProductVariationsDialog } from "@/components/products/product-variations-dialog"
-import { Button } from "@/components/ui/button"
-import { Plus, Loader2, Package, FolderOpen } from "lucide-react"
-import { toast } from "sonner"
-import type { Product, Category, ProductFilters as ProductFiltersType, ProductFormData } from "@/lib/types/product"
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { ProductCard } from "@/components/products/product-card";
+import { ProductFilters } from "@/components/products/product-filters";
+import { ProductDialog } from "@/components/products/product-dialog";
+import { ProductVariationsDialog } from "@/components/products/product-variations-dialog";
+import { ProductExtrasDialog } from "@/components/products/product-extras-dialog";
+import { ProductsGridSkeleton } from "@/components/ui/skeleton-patterns";
+import { ConfirmDialog } from "@/components/ui/confirme-dialog";
+import { Button } from "@/components/ui/button";
+import { Plus, Package, FolderOpen } from "lucide-react";
+import { toast } from "sonner";
+import { logger } from "@/lib/logger";
+import type {
+  Product,
+  Category,
+  ProductFilters as ProductFiltersType,
+  ProductFormData,
+} from "@/lib/types/product";
 
 export default function ProductsPage() {
-  const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
+  const router = useRouter();
+  const supabase = createBrowserSupabaseClient();
 
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [filters, setFilters] = useState<ProductFiltersType>({
     category_id: "all",
     search: "",
     is_available: "all",
-  })
+  });
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  const [variationsDialogOpen, setVariationsDialogOpen] = useState(false)
-  const [selectedProductForVariations, setSelectedProductForVariations] = useState<Product | null>(null)
+  const [variationsDialogOpen, setVariationsDialogOpen] = useState(false);
+  const [selectedProductForVariations, setSelectedProductForVariations] =
+    useState<Product | null>(null);
+
+  const [extrasDialogOpen, setExtrasDialogOpen] = useState(false);
+  const [selectedProductForExtras, setSelectedProductForExtras] =
+    useState<Product | null>(null);
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    productId?: string;
+    productName?: string;
+  }>({ open: false });
+
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
-      setIsLoading(true)
+      setIsLoading(true);
 
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user.id)
-        .single()
+        .single();
 
-      if (!profile) return
+      if (!profile) return;
 
       let query = supabase
         .from("products")
@@ -58,182 +80,249 @@ export default function ProductsPage() {
         `
         )
         .eq("tenant_id", profile.tenant_id)
-        .order("name")
+        .order("name");
 
       if (filters.category_id && filters.category_id !== "all") {
-        query = query.eq("category_id", filters.category_id)
+        query = query.eq("category_id", filters.category_id);
       }
 
       if (filters.search && filters.search.trim().length > 0) {
-        query = query.ilike("name", `%${filters.search.trim()}%`)
+        query = query.ilike("name", `%${filters.search.trim()}%`);
       }
 
       if (
         filters.is_available !== "all" &&
         filters.is_available !== undefined
       ) {
-        query = query.eq("is_available", filters.is_available)
+        query = query.eq("is_available", filters.is_available);
       }
 
-      const { data, error } = await query
+      const { data, error } = await query;
 
       if (error) {
-        console.error("Erro ao carregar produtos:", error)
-        toast.error("Erro ao carregar produtos")
-        return
+        logger.error("Erro ao carregar produtos:", error);
+        toast.error("Erro ao carregar produtos");
+        return;
       }
 
-      setProducts(data as Product[])
+      setProducts(data as Product[]);
     } catch (error) {
-      console.error("Erro ao carregar produtos:", error)
+      logger.error("Erro ao carregar produtos:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [supabase, filters])
+  }, [supabase, filters]);
 
   const handleSave = useCallback(
     async (data: ProductFormData) => {
       try {
         const {
           data: { user },
-        } = await supabase.auth.getUser()
-        if (!user) return
+        } = await supabase.auth.getUser();
+        if (!user) return;
 
         const { data: profile } = await supabase
           .from("profiles")
           .select("tenant_id")
           .eq("id", user.id)
-          .single()
+          .single();
 
-        if (!profile) return
+        if (!profile) return;
 
         if (selectedProduct) {
+          // ATUALIZAR
           const updateData = {
             name: data.name,
             description: data.description || null,
             price: data.price,
             category_id: data.category_id || null,
+            image_url: data.image_url || null,
             is_available: data.is_available,
             updated_at: new Date().toISOString(),
-          }
+          };
+
+          logger.debug("📝 Atualizando produto:", updateData);
 
           const { error } = await supabase
             .from("products")
             .update(updateData)
-            .eq("id", selectedProduct.id)
+            .eq("id", selectedProduct.id);
 
-          if (error) throw error
+          if (error) throw error;
 
-          toast.success("Produto atualizado com sucesso!")
+          toast.success("Produto atualizado com sucesso!");
         } else {
+          // CRIAR
           const insertData = {
             tenant_id: profile.tenant_id,
             name: data.name,
             description: data.description || null,
             price: data.price,
             category_id: data.category_id || null,
+            image_url: data.image_url || null,
             is_available: data.is_available,
-          }
+          };
 
-          const { error } = await supabase
-            .from("products")
-            .insert(insertData)
+          logger.debug("➕ Criando produto:", insertData);
 
-          if (error) throw error
+          const { error } = await supabase.from("products").insert(insertData);
 
-          toast.success("Produto criado com sucesso!")
+          if (error) throw error;
+
+          toast.success("Produto criado com sucesso!");
         }
 
-        loadProducts()
-        setSelectedProduct(null)
+        loadProducts();
+        setSelectedProduct(null);
       } catch (error) {
-        console.error("❌ Erro ao salvar produto:", error)
+        logger.error("❌ Erro ao salvar produto:", error);
         toast.error("Erro ao salvar produto", {
           description:
             error instanceof Error ? error.message : "Erro desconhecido",
-        })
-        throw error
+        });
+        throw error;
       }
     },
     [supabase, selectedProduct, loadProducts]
-  )
+  );
 
   const loadCategories = useCallback(async () => {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user.id)
-        .single()
+        .single();
 
-      if (!profile) return
+      if (!profile) return;
 
       const { data, error } = await supabase
         .from("categories")
         .select("*")
         .eq("tenant_id", profile.tenant_id)
         .eq("is_active", true)
-        .order("display_order")
+        .order("display_order");
 
       if (error) {
-        console.error("Erro ao carregar categorias:", error)
-        return
+        logger.error("Erro ao carregar categorias:", error);
+        return;
       }
 
-      setCategories(data)
+      setCategories(data);
     } catch (error) {
-      console.error("Erro ao carregar categorias:", error)
+      logger.error("Erro ao carregar categorias:", error);
     }
-  }, [supabase])
+  }, [supabase]);
 
-  const handleDelete = useCallback(
-    async (productId: string) => {
-      if (!confirm("Tem certeza que deseja excluir este produto?")) {
-        return
+  const handleDeleteClick = useCallback((product: Product) => {
+    setDeleteDialog({
+      open: true,
+      productId: product.id,
+      productName: product.name,
+    });
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog.productId) return;
+
+    try {
+      setIsDeleting(true);
+
+      // ✅ VERIFICAR SE PRODUTO JÁ FOI USADO EM PEDIDOS
+      const { count: usageCount, error: checkError } = await supabase
+        .from("order_items")
+        .select("*", { count: "exact", head: true })
+        .eq("product_id", deleteDialog.productId);
+
+      if (checkError) {
+        logger.error("Erro ao verificar uso do produto:", checkError);
+        toast.error("Erro ao verificar produto");
+        return;
       }
 
-      try {
-        const { error } = await supabase
+      // ✅ SE PRODUTO JÁ FOI USADO, APENAS DESATIVAR
+      if (usageCount && usageCount > 0) {
+        logger.debug(
+          "Produto já foi usado em pedidos, desativando ao invés de deletar",
+          {
+            productId: deleteDialog.productId,
+            usageCount,
+          }
+        );
+
+        const { error: updateError } = await supabase
+          .from("products")
+          .update({ is_available: false })
+          .eq("id", deleteDialog.productId);
+
+        if (updateError) {
+          logger.error("Erro ao desativar produto:", updateError);
+          toast.error("Erro ao desativar produto");
+          return;
+        }
+
+        toast.success("Produto desativado com sucesso!", {
+          description: `Este produto já foi vendido ${usageCount} vez(es) e foi desativado ao invés de excluído para manter o histórico de pedidos.`,
+        });
+      } else {
+        // ✅ SE NUNCA FOI USADO, PODE DELETAR
+        logger.debug("Produto nunca foi usado, deletando permanentemente");
+
+        const { error: deleteError } = await supabase
           .from("products")
           .delete()
-          .eq("id", productId)
+          .eq("id", deleteDialog.productId);
 
-        if (error) throw error
+        if (deleteError) {
+          logger.error("Erro ao excluir produto:", deleteError);
+          toast.error("Erro ao excluir produto", {
+            description: deleteError.message,
+          });
+          return;
+        }
 
-        toast.success("Produto excluído com sucesso!")
-        loadProducts()
-      } catch (error) {
-        console.error("Erro ao excluir produto:", error)
-        toast.error("Erro ao excluir produto")
+        toast.success("Produto excluído com sucesso!");
       }
-    },
-    [supabase, loadProducts]
-  )
+
+      await loadProducts();
+      setDeleteDialog({ open: false });
+    } catch (error) {
+      logger.error("Erro inesperado:", error);
+      toast.error("Erro inesperado ao processar produto");
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteDialog.productId, supabase, loadProducts]);
 
   const handleEdit = useCallback((product: Product) => {
-    setSelectedProduct(product)
-    setIsDialogOpen(true)
-  }, [])
+    setSelectedProduct(product);
+    setIsDialogOpen(true);
+  }, []);
 
   const handleCreate = useCallback(() => {
-    setSelectedProduct(null)
-    setIsDialogOpen(true)
-  }, [])
+    setSelectedProduct(null);
+    setIsDialogOpen(true);
+  }, []);
 
   const handleManageVariations = useCallback((product: Product) => {
-    setSelectedProductForVariations(product)
-    setVariationsDialogOpen(true)
-  }, [])
+    setSelectedProductForVariations(product);
+    setVariationsDialogOpen(true);
+  }, []);
+
+  const handleManageExtras = useCallback((product: Product) => {
+    setSelectedProductForExtras(product);
+    setExtrasDialogOpen(true);
+  }, []);
 
   useEffect(() => {
-    loadProducts()
-    loadCategories()
-  }, [loadProducts, loadCategories])
+    loadProducts();
+    loadCategories();
+  }, [loadProducts, loadCategories]);
 
   return (
     <div className="space-y-6">
@@ -271,9 +360,7 @@ export default function ProductsPage() {
 
       {/* Lista de produtos */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <ProductsGridSkeleton count={8} />
       ) : products.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Package className="h-16 w-16 text-muted-foreground mb-4" />
@@ -299,12 +386,28 @@ export default function ProductsPage() {
               key={product.id}
               product={product}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={() => handleDeleteClick(product)}
               onManageVariations={handleManageVariations}
+              onManageExtras={handleManageExtras}
             />
           ))}
         </div>
       )}
+
+      {/* Dialog de confirmação de exclusão */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+        title="Excluir produto?"
+        description={`Deseja excluir "${deleteDialog.productName}"? 
+    
+Se o produto já foi vendido, ele será apenas desativado para preservar o histórico de pedidos. Caso contrário, será excluído permanentemente.`}
+        confirmText="Continuar"
+        cancelText="Cancelar"
+        onConfirm={confirmDelete}
+        variant="destructive"
+        isLoading={isDeleting}
+      />
 
       {/* Dialog de criar/editar */}
       <ProductDialog
@@ -321,6 +424,13 @@ export default function ProductsPage() {
         onOpenChange={setVariationsDialogOpen}
         product={selectedProductForVariations}
       />
+
+      {/* Dialog de extras */}
+      <ProductExtrasDialog
+        open={extrasDialogOpen}
+        onOpenChange={setExtrasDialogOpen}
+        product={selectedProductForExtras}
+      />
     </div>
-  )
+  );
 }

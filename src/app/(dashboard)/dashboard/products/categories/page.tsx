@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import type { Category } from "@/lib/types/product";
 
+import { logger } from "@/lib/logger";
 export default function CategoriesPage() {
   const supabase = createBrowserSupabaseClient();
 
@@ -60,14 +61,14 @@ export default function CategoriesPage() {
         .order("display_order");
 
       if (error) {
-        console.error("Erro ao carregar categorias:", error);
+        logger.error("Erro ao carregar categorias:", error);
         toast.error("Erro ao carregar categorias");
         return;
       }
 
       setCategories(data);
     } catch (error) {
-      console.error("Erro ao carregar categorias:", error);
+      logger.error("Erro ao carregar categorias:", error);
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +93,7 @@ export default function CategoriesPage() {
         toast.success("Categoria excluída com sucesso!");
         loadCategories();
       } catch (error) {
-        console.error("Erro ao excluir categoria:", error);
+        logger.error("Erro ao excluir categoria:", error);
         toast.error("Erro ao excluir categoria");
       }
     },
@@ -124,7 +125,7 @@ export default function CategoriesPage() {
         toast.success("Ordem atualizada!");
         loadCategories();
       } catch (error) {
-        console.error("Erro ao reordenar:", error);
+        logger.error("Erro ao reordenar:", error);
         toast.error("Erro ao reordenar categoria");
       }
     },
@@ -156,7 +157,7 @@ export default function CategoriesPage() {
         toast.success("Ordem atualizada!");
         loadCategories();
       } catch (error) {
-        console.error("Erro ao reordenar:", error);
+        logger.error("Erro ao reordenar:", error);
         toast.error("Erro ao reordenar categoria");
       }
     },
@@ -223,7 +224,7 @@ export default function CategoriesPage() {
         loadCategories();
         setSelectedCategory(null);
       } catch (error) {
-        console.error("Erro ao salvar categoria:", error);
+        logger.error("Erro ao salvar categoria:", error);
         toast.error("Erro ao salvar categoria");
         throw error;
       }
@@ -248,7 +249,7 @@ export default function CategoriesPage() {
         );
         loadCategories();
       } catch (error) {
-        console.error("Erro ao atualizar categoria:", error);
+        logger.error("Erro ao atualizar categoria:", error);
         toast.error("Erro ao atualizar categoria");
       }
     },
