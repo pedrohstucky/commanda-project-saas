@@ -5,9 +5,12 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CategoryDialog } from "@/components/products/category-dialog";
+import { CategoriesTableSkeleton } from "@/components/ui/skeleton-patterns";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toastWithUndo, toastError } from "@/lib/toast-helpers";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Plus,
-  Loader2,
   FolderOpen,
   Pencil,
   Trash2,
@@ -33,7 +36,12 @@ export default function CategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null
   );
-
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    categoryId?: string;
+    categoryName?: string;
+  }>({ open: false });
+  const [isDeleting, setIsDeleting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,31 +82,77 @@ export default function CategoriesPage() {
     }
   }, [supabase]);
 
-  const handleDelete = useCallback(
-    async (categoryId: string) => {
-      if (
-        !confirm("Tem certeza? Produtos desta categoria ficarão sem categoria.")
-      ) {
+  const handleDeleteClick = useCallback((category: Category) => {
+    setDeleteDialog({
+      open: true,
+      categoryId: category.id,
+      categoryName: category.name,
+    });
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog.categoryId) return;
+
+    try {
+      setIsDeleting(true);
+
+      // ✅ Salvar referência da categoria ANTES
+      const categoryToDelete = categories.find(
+        (c) => c.id === deleteDialog.categoryId
+      );
+      if (!categoryToDelete) {
+        toast.error("Categoria não encontrada");
         return;
       }
 
-      try {
-        const { error } = await supabase
-          .from("categories")
-          .delete()
-          .eq("id", categoryId);
+      // 1. Optimistic update
+      setCategories((prev) =>
+        prev.filter((c) => c.id !== deleteDialog.categoryId)
+      );
 
-        if (error) throw error;
+      // 2. Toast com desfazer
+      toastWithUndo(
+        `${categoryToDelete.name} excluída`,
+        async () => {
+          // Recriar categoria
+          const { error } = await supabase.from("categories").insert({
+            id: categoryToDelete.id,
+            tenant_id: categoryToDelete.tenant_id,
+            name: categoryToDelete.name,
+            description: categoryToDelete.description,
+            display_order: categoryToDelete.display_order,
+            is_active: categoryToDelete.is_active,
+            created_at: categoryToDelete.created_at,
+          });
 
-        toast.success("Categoria excluída com sucesso!");
-        loadCategories();
-      } catch (error) {
-        logger.error("Erro ao excluir categoria:", error);
-        toast.error("Erro ao excluir categoria");
-      }
-    },
-    [supabase, loadCategories]
-  );
+          if (error) throw error;
+
+          // Recarregar lista
+          await loadCategories();
+        },
+        {
+          description: "Os produtos desta categoria ficarão sem categoria.",
+          duration: 6000,
+        }
+      );
+
+      // 3. Persistir exclusão
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", deleteDialog.categoryId);
+
+      if (error) throw error;
+
+      setDeleteDialog({ open: false });
+    } catch (error) {
+      // Reverter em caso de erro
+      await loadCategories();
+      toastError("Erro ao excluir categoria", error, { showDetails: true });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteDialog.categoryId, supabase, categories, loadCategories]);
 
   const handleMoveUp = useCallback(
     async (category: Category) => {
@@ -234,28 +288,42 @@ export default function CategoriesPage() {
 
   const toggleActive = useCallback(
     async (category: Category) => {
+      // 1. Optimistic update
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === category.id ? { ...c, is_active: !c.is_active } : c
+        )
+      );
+
+      // 2. Toast imediato
+      toast.success(
+        category.is_active
+          ? `${category.name} desativada`
+          : `${category.name} ativada`
+      );
+
       try {
+        // 3. Persistir
         const { error } = await supabase
           .from("categories")
           .update({ is_active: !category.is_active })
           .eq("id", category.id);
 
         if (error) throw error;
-
-        toast.success(
-          category.is_active
-            ? `"${category.name}" desativada`
-            : `"${category.name}" ativada`
-        );
-        loadCategories();
       } catch (error) {
+        // 4. Reverter em caso de erro
+        setCategories((prev) =>
+          prev.map((c) =>
+            c.id === category.id ? { ...c, is_active: category.is_active } : c
+          )
+        );
+
         logger.error("Erro ao atualizar categoria:", error);
         toast.error("Erro ao atualizar categoria");
       }
     },
-    [supabase, loadCategories]
+    [supabase]
   );
-
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
@@ -285,16 +353,20 @@ export default function CategoriesPage() {
 
       {/* Tabela */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <CategoriesTableSkeleton count={5} />
       ) : categories.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">
-            Nenhuma categoria encontrada
-          </h3>
-        </div>
+        <EmptyState
+          icon={FolderOpen}
+          title="Nenhuma categoria criada"
+          description="Crie categorias para organizar melhor seu cardápio e facilitar a navegação dos clientes."
+          action={{
+            label: "Criar primeira categoria",
+            onClick: () => {
+              setSelectedCategory(null);
+              setIsDialogOpen(true);
+            },
+          }}
+        />
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
@@ -303,7 +375,9 @@ export default function CategoriesPage() {
                 <TableHead className="w-20">Ordem</TableHead>
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead className="hidden md:table-cell">Descrição</TableHead>
+                <TableHead className="hidden md:table-cell">
+                  Descrição
+                </TableHead>
                 <TableHead className="w-32">Status</TableHead>
                 <TableHead className="w-32 text-right">Ações</TableHead>
               </TableRow>
@@ -368,7 +442,7 @@ export default function CategoriesPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(category.id)}
+                        onClick={() => handleDeleteClick(category)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -387,6 +461,19 @@ export default function CategoriesPage() {
         onOpenChange={setIsDialogOpen}
         category={selectedCategory}
         onSave={handleSave}
+      />
+
+      {/* Dialog de confirmação */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+        title="Excluir categoria?"
+        description={`Tem certeza que deseja excluir "${deleteDialog.categoryName}"? Os produtos desta categoria ficarão sem categoria.`}
+        confirmText="Excluir categoria"
+        cancelText="Cancelar"
+        onConfirm={confirmDelete}
+        variant="destructive"
+        isLoading={isDeleting}
       />
     </div>
   );

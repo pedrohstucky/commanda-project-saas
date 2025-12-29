@@ -18,7 +18,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
             width={160}
             height={40}
             priority
-            className="h-10 w-auto dark:hidden"
+            className="h-8 w-auto dark:hidden"
           />
 
           {/* Dark */}
@@ -28,7 +28,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
             width={160}
             height={40}
             priority
-            className="hidden h-10 w-auto dark:block"
+            className="hidden h-8 w-auto dark:block"
           />
         </>
       ) : (
@@ -48,7 +48,7 @@ export function Logo({ className, variant = "full" }: LogoProps) {
             alt="Platoo"
             width={36}
             height={36}
-            className="hidden h-13 w-13 dark:block"
+            className="hidden h-9 w-9 dark:block"
           />
         </>
       )}

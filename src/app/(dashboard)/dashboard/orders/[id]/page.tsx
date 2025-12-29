@@ -10,13 +10,14 @@ import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { OrderDetailsSkeleton } from "@/components/ui/skeleton-patterns";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   ArrowLeft,
   User,
   Phone,
   MessageSquare,
   Calendar,
-  Loader2,
   Printer,
   MapPin,
   Package,
@@ -25,17 +26,10 @@ import { toast } from "sonner";
 import type { OrderWithItems } from "@/lib/types/order";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
 import { logger } from "@/lib/logger";
+
 /**
  * Página de detalhes do pedido
- *
- * Mostra:
- * - Informações do cliente
- * - Status e timeline
- * - Lista de itens
- * - Ações disponíveis
- * - Histórico de mudanças
  */
 export default function OrderDetailsPage() {
   const router = useRouter();
@@ -46,20 +40,14 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [rejectDialog, setRejectDialog] = useState(false);
 
-  /**
-   * Formata valor monetário
-   */
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(value);
-  };
 
-  /**
-   * Formata data relativa
-   */
   const formatDate = (date: string) => {
     try {
       return formatDistanceToNow(new Date(date), {
@@ -71,9 +59,6 @@ export default function OrderDetailsPage() {
     }
   };
 
-  /**
-   * Carrega detalhes do pedido
-   */
   const loadOrder = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -81,6 +66,7 @@ export default function OrderDetailsPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (!user) {
         router.push("/login");
         return;
@@ -98,31 +84,31 @@ export default function OrderDetailsPage() {
         .from("orders")
         .select(
           `
-        *,
-        order_items (
-          id,
-          quantity,
-          product_price,
-          product_id,
-          product_name,
-          variation_id,
-          variation_name,
-          subtotal,
-          order_item_extras (
+          *,
+          order_items (
             id,
-            extra_id,
-            extra_name,
-            extra_price
-          ),
-          products (
-            id,
-            name,
-            description,
-            image_url,
-            category_id
+            quantity,
+            product_price,
+            product_id,
+            product_name,
+            variation_id,
+            variation_name,
+            subtotal,
+            order_item_extras (
+              id,
+              extra_id,
+              extra_name,
+              extra_price
+            ),
+            products (
+              id,
+              name,
+              description,
+              image_url,
+              category_id
+            )
           )
-        )
-      `
+        `
         )
         .eq("id", orderId)
         .eq("tenant_id", profile.tenant_id)
@@ -130,16 +116,10 @@ export default function OrderDetailsPage() {
 
       if (error) {
         logger.error("Erro ao carregar pedido:", error);
-        toast.error("Erro ao carregar pedido", {
-          description: error.message,
-        });
+        toast.error("Erro ao carregar pedido");
         router.push("/dashboard/orders");
         return;
       }
-
-      // ← ADICIONAR LOGS PARA DEBUG
-      logger.debug("📦 Pedido carregado:", data);
-      logger.debug("📦 Order items:", data?.order_items);
 
       setOrder(data as OrderWithItems);
     } catch (error) {
@@ -151,13 +131,6 @@ export default function OrderDetailsPage() {
     }
   }, [supabase, orderId, router]);
 
-  /**
-   * Aceita o pedido
-   */
-
-  /**
-   * Aceita o pedido via API
-   */
   const handleAccept = useCallback(
     async (orderId: string) => {
       try {
@@ -173,17 +146,11 @@ export default function OrderDetailsPage() {
           throw new Error(data.error || "Erro ao aceitar pedido");
         }
 
-        toast.success("Pedido aceito!", {
-          description: "O pedido está agora em preparo.",
-        });
-
+        toast.success("Pedido aceito!");
         loadOrder();
       } catch (error) {
         logger.error("Erro ao aceitar pedido:", error);
-        toast.error("Erro ao aceitar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
+        toast.error("Erro ao aceitar pedido");
       } finally {
         setActionLoading(false);
       }
@@ -191,51 +158,39 @@ export default function OrderDetailsPage() {
     [loadOrder]
   );
 
-  /**
-   * Recusa o pedido via API
-   */
-  const handleReject = useCallback(
-    async (orderId: string) => {
-      try {
-        setActionLoading(true);
+  const handleRejectClick = useCallback(() => {
+    setRejectDialog(true);
+  }, []);
 
-        const response = await fetch(`/api/orders/${orderId}/reject`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            reason: "Recusado pelo atendente",
-          }),
-        });
+  const confirmReject = useCallback(async () => {
+    if (!order) return;
 
-        const data = await response.json();
+    try {
+      setActionLoading(true);
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Erro ao recusar pedido");
-        }
+      const response = await fetch(`/api/orders/${order.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Recusado pelo atendente" }),
+      });
 
-        toast.success("Pedido recusado", {
-          description: "O pedido foi cancelado.",
-        });
+      const data = await response.json();
 
-        loadOrder();
-      } catch (error) {
-        logger.error("Erro ao recusar pedido:", error);
-        toast.error("Erro ao recusar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
-      } finally {
-        setActionLoading(false);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erro ao recusar pedido");
       }
-    },
-    [loadOrder]
-  );
 
-  /**
-   * Completa o pedido via API
-   */
+      toast.success("Pedido recusado");
+      loadOrder();
+      setRejectDialog(false);
+    } catch (error) {
+      logger.error("Erro ao recusar pedido:", error);
+      toast.error("Erro ao recusar pedido");
+    } finally {
+      setActionLoading(false);
+    }
+  }, [order, loadOrder]);
+
   const handleComplete = useCallback(
     async (orderId: string) => {
       try {
@@ -251,17 +206,11 @@ export default function OrderDetailsPage() {
           throw new Error(data.error || "Erro ao completar pedido");
         }
 
-        toast.success("Pedido concluído!", {
-          description: "O pedido foi marcado como entregue.",
-        });
-
+        toast.success("Pedido concluído!");
         loadOrder();
       } catch (error) {
         logger.error("Erro ao completar pedido:", error);
-        toast.error("Erro ao completar pedido", {
-          description:
-            error instanceof Error ? error.message : "Tente novamente",
-        });
+        toast.error("Erro ao completar pedido");
       } finally {
         setActionLoading(false);
       }
@@ -269,13 +218,9 @@ export default function OrderDetailsPage() {
     [loadOrder]
   );
 
-  /**
-   * Carrega pedido e configura Realtime
-   */
   useEffect(() => {
     loadOrder();
 
-    // Realtime - escuta mudanças neste pedido
     const channel = supabase
       .channel(`order-${orderId}`)
       .on(
@@ -286,9 +231,7 @@ export default function OrderDetailsPage() {
           table: "orders",
           filter: `id=eq.${orderId}`,
         },
-        () => {
-          loadOrder();
-        }
+        loadOrder
       )
       .subscribe();
 
@@ -297,32 +240,26 @@ export default function OrderDetailsPage() {
     };
   }, [supabase, orderId, loadOrder]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (isLoading) return <OrderDetailsSkeleton />;
 
   if (!order) {
     return (
-      <div className="text-center py-12">
+      <div className="py-12 text-center">
         <p className="text-muted-foreground">Pedido não encontrado</p>
         <Button
           variant="outline"
           className="mt-4"
           onClick={() => router.push("/dashboard/orders")}
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Voltar para pedidos
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -333,9 +270,9 @@ export default function OrderDetailsPage() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-  
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold sm:text-3xl">
+
+          <div>
+            <h1 className="text-xl font-bold sm:text-3xl">
               Pedido #{order.id.slice(0, 8)}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -343,24 +280,19 @@ export default function OrderDetailsPage() {
             </p>
           </div>
         </div>
-  
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+
+        <div className="flex items-center gap-2">
           <OrderStatusBadge status={order.status} />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => window.print()}
-          >
+          <Button variant="outline" size="icon" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
           </Button>
         </div>
       </div>
-  
+
       {/* Conteúdo */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Coluna Principal */}
+        {/* Principal */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Itens */}
           <Card>
             <CardHeader>
               <CardTitle>Itens do Pedido</CardTitle>
@@ -369,76 +301,67 @@ export default function OrderDetailsPage() {
               <OrderItemsList items={order.order_items || []} />
             </CardContent>
           </Card>
-  
-          {/* Timeline */}
+
           <Card>
             <CardHeader>
-              <CardTitle>Andamento do Pedido</CardTitle>
+              <CardTitle>Andamento</CardTitle>
             </CardHeader>
             <CardContent>
               <OrderTimeline order={order} />
             </CardContent>
           </Card>
         </div>
-  
+
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Cliente */}
           <Card>
             <CardHeader>
               <CardTitle>Cliente</CardTitle>
             </CardHeader>
-  
             <CardContent className="space-y-4">
               {order.customer_name && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm">
                   <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{order.customer_name}</span>
+                  {order.customer_name}
                 </div>
               )}
-  
+
               {order.customer_phone && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{order.customer_phone}</span>
+                  {order.customer_phone}
                 </div>
               )}
-  
+
               <Separator />
-  
-              {/* Entrega */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
                   {order.delivery_type === "delivery" ? (
                     <>
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Entrega</span>
+                      <MapPin className="h-4 w-4" /> Entrega
                     </>
                   ) : (
                     <>
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        Retirada no Local
-                      </span>
+                      <Package className="h-4 w-4" /> Retirada
                     </>
                   )}
                 </div>
-  
-                {order.delivery_type === "delivery" &&
-                  order.delivery_address && (
-                    <p className="pl-6 text-sm text-muted-foreground">
-                      {order.delivery_address}
-                    </p>
-                  )}
+
+                {order.delivery_address && (
+                  <p className="pl-6 text-sm text-muted-foreground">
+                    {order.delivery_address}
+                  </p>
+                )}
               </div>
-  
+
               {order.notes && (
                 <>
                   <Separator />
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Observações</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <MessageSquare className="h-4 w-4" />
+                      Observações
                     </div>
                     <p className="pl-6 text-sm text-muted-foreground">
                       {order.notes}
@@ -448,8 +371,7 @@ export default function OrderDetailsPage() {
               )}
             </CardContent>
           </Card>
-  
-          {/* Resumo */}
+
           <Card>
             <CardHeader>
               <CardTitle>Resumo</CardTitle>
@@ -457,12 +379,11 @@ export default function OrderDetailsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Criado:</span>
-                <span>{formatDate(order.created_at)}</span>
+                Criado {formatDate(order.created_at)}
               </div>
-  
+
               <Separator />
-  
+
               <div className="flex items-center justify-between">
                 <span className="font-semibold">Total</span>
                 <span className="text-xl font-bold sm:text-2xl">
@@ -471,8 +392,7 @@ export default function OrderDetailsPage() {
               </div>
             </CardContent>
           </Card>
-  
-          {/* Ações */}
+
           <Card>
             <CardHeader>
               <CardTitle>Ações</CardTitle>
@@ -482,8 +402,22 @@ export default function OrderDetailsPage() {
                 orderId={order.id}
                 status={order.status}
                 onAccept={handleAccept}
-                onReject={handleReject}
+                onReject={handleRejectClick}
                 onComplete={handleComplete}
+                isLoading={actionLoading}
+              />
+
+              <ConfirmDialog
+                open={rejectDialog}
+                onOpenChange={setRejectDialog}
+                title="Recusar pedido?"
+                description={`Tem certeza que deseja recusar o pedido de ${
+                  order.customer_name || "Cliente"
+                }?`}
+                confirmText="Recusar pedido"
+                cancelText="Cancelar"
+                onConfirm={confirmReject}
+                variant="destructive"
                 isLoading={actionLoading}
               />
             </CardContent>
@@ -492,5 +426,4 @@ export default function OrderDetailsPage() {
       </div>
     </div>
   );
-  
 }

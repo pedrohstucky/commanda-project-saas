@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { RefreshCw, Loader2, Smartphone } from "lucide-react"
+import { RefreshCw, Smartphone, Loader2 } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { WhatsAppOnboardingSkeleton } from "@/components/ui/skeleton-patterns"
 import Image from "next/image"
 
 import { logger } from "@/lib/logger";
@@ -127,16 +128,14 @@ export default function WhatsAppOnboardingPage() {
           </div>
         </header>
         <main className="container mx-auto px-4 py-12">
-          <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-              <p className="mt-4 text-muted-foreground">Carregando...</p>
-            </div>
+          <div className="mx-auto max-w-4xl">
+            <WhatsAppOnboardingSkeleton />
           </div>
         </main>
       </div>
     )
   }
+  
 
   // =====================================================
   // ERROR STATE

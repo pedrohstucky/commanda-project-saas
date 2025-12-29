@@ -9,9 +9,16 @@ import { ProductDialog } from "@/components/products/product-dialog";
 import { ProductVariationsDialog } from "@/components/products/product-variations-dialog";
 import { ProductExtrasDialog } from "@/components/products/product-extras-dialog";
 import { ProductsGridSkeleton } from "@/components/ui/skeleton-patterns";
-import { ConfirmDialog } from "@/components/ui/confirme-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Package, FolderOpen } from "lucide-react";
+import { EmptyState, NoResultsState } from "@/components/ui/empty-state";
+import { toastWithUndo, toastError } from "@/lib/toast-helpers";
+import {
+  StaggerContainer,
+  StaggerItem,
+  PageTransition,
+} from "@/components/ui/animations";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import type {
@@ -76,7 +83,9 @@ export default function ProductsPage() {
         .select(
           `
           *,
-          category:categories(*)
+          category:categories(*),
+          variations:product_variations(count),
+          extras:product_extras(count)
         `
         )
         .eq("tenant_id", profile.tenant_id)
@@ -233,71 +242,123 @@ export default function ProductsPage() {
     try {
       setIsDeleting(true);
 
-      // ✅ VERIFICAR SE PRODUTO JÁ FOI USADO EM PEDIDOS
-      const { count: usageCount, error: checkError } = await supabase
+      // Salvar referência do produto ANTES de modificar
+      const productToDelete = products.find(
+        (p) => p.id === deleteDialog.productId
+      );
+      if (!productToDelete) {
+        toast.error("Produto não encontrado");
+        return;
+      }
+
+      // Verificar uso em pedidos
+      const { count: usageCount, error: countError } = await supabase
         .from("order_items")
         .select("*", { count: "exact", head: true })
         .eq("product_id", deleteDialog.productId);
 
-      if (checkError) {
-        logger.error("Erro ao verificar uso do produto:", checkError);
-        toast.error("Erro ao verificar produto");
-        return;
+      if (countError) {
+        throw countError;
       }
 
-      // ✅ SE PRODUTO JÁ FOI USADO, APENAS DESATIVAR
       if (usageCount && usageCount > 0) {
-        logger.debug(
-          "Produto já foi usado em pedidos, desativando ao invés de deletar",
+        // ===== DESATIVAR =====
+
+        // 1. Optimistic update
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === deleteDialog.productId ? { ...p, is_available: false } : p
+          )
+        );
+
+        // 2. Toast com desfazer
+        toastWithUndo(
+          `${productToDelete.name} desativado`,
+          async () => {
+            // Reativar produto
+            const { error } = await supabase
+              .from("products")
+              .update({ is_available: true })
+              .eq("id", deleteDialog.productId);
+
+            if (error) throw error;
+
+            // Atualizar UI
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === deleteDialog.productId
+                  ? { ...p, is_available: true }
+                  : p
+              )
+            );
+          },
           {
-            productId: deleteDialog.productId,
-            usageCount,
+            description: `Vendido ${usageCount}x. Desativado para preservar histórico.`,
+            duration: 6000,
           }
         );
 
+        // 3. Persistir desativação
         const { error: updateError } = await supabase
           .from("products")
           .update({ is_available: false })
           .eq("id", deleteDialog.productId);
 
-        if (updateError) {
-          logger.error("Erro ao desativar produto:", updateError);
-          toast.error("Erro ao desativar produto");
-          return;
-        }
-
-        toast.success("Produto desativado com sucesso!", {
-          description: `Este produto já foi vendido ${usageCount} vez(es) e foi desativado ao invés de excluído para manter o histórico de pedidos.`,
-        });
+        if (updateError) throw updateError;
       } else {
-        // ✅ SE NUNCA FOI USADO, PODE DELETAR
-        logger.debug("Produto nunca foi usado, deletando permanentemente");
+        // ===== DELETAR =====
 
+        // 1. Optimistic update
+        setProducts((prev) =>
+          prev.filter((p) => p.id !== deleteDialog.productId)
+        );
+
+        // 2. Toast com desfazer
+        toastWithUndo(
+          `${productToDelete.name} excluído`,
+          async () => {
+            // Recriar produto (copia TODOS os campos)
+            const { error } = await supabase.from("products").insert({
+              id: productToDelete.id,
+              tenant_id: productToDelete.tenant_id,
+              name: productToDelete.name,
+              description: productToDelete.description,
+              price: productToDelete.price,
+              category_id: productToDelete.category_id,
+              image_url: productToDelete.image_url,
+              is_available: productToDelete.is_available,
+              created_at: productToDelete.created_at,
+            });
+
+            if (error) throw error;
+
+            // Recarregar lista
+            await loadProducts();
+          },
+          {
+            description: "Nunca foi vendido.",
+            duration: 6000,
+          }
+        );
+
+        // 3. Persistir exclusão
         const { error: deleteError } = await supabase
           .from("products")
           .delete()
           .eq("id", deleteDialog.productId);
 
-        if (deleteError) {
-          logger.error("Erro ao excluir produto:", deleteError);
-          toast.error("Erro ao excluir produto", {
-            description: deleteError.message,
-          });
-          return;
-        }
-
-        toast.success("Produto excluído com sucesso!");
+        if (deleteError) throw deleteError;
       }
 
-      await loadProducts();
       setDeleteDialog({ open: false });
     } catch (error) {
-      logger.error("Erro inesperado:", error);
-      toast.error("Erro inesperado ao processar produto");
+      // Reverter tudo em caso de erro
+      await loadProducts();
+      toastError("Erro ao processar produto", error, { showDetails: true });
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteDialog.productId, supabase, loadProducts]);
+  }, [deleteDialog.productId, supabase, products, loadProducts]);
 
   const handleEdit = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -319,118 +380,176 @@ export default function ProductsPage() {
     setExtrasDialogOpen(true);
   }, []);
 
+  const toggleAvailability = useCallback(
+    async (product: Product) => {
+      // 1. Optimistic update
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id ? { ...p, is_available: !p.is_available } : p
+        )
+      );
+
+      // 2. Toast com NOME do produto
+      toast.success(
+        product.is_available
+          ? `${product.name} desativado`
+          : `${product.name} ativado`
+      );
+
+      try {
+        // 3. Persistir
+        const { error } = await supabase
+          .from("products")
+          .update({ is_available: !product.is_available })
+          .eq("id", product.id);
+
+        if (error) throw error;
+      } catch (error) {
+        // 4. Reverter em caso de erro
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === product.id
+              ? { ...p, is_available: product.is_available }
+              : p
+          )
+        );
+
+        logger.error("Erro ao atualizar produto:", error);
+        toast.error("Erro ao atualizar disponibilidade");
+      }
+    },
+    [supabase]
+  );
   useEffect(() => {
     loadProducts();
     loadCategories();
   }, [loadProducts, loadCategories]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Cardápio</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Gerencie os produtos do seu restaurante
-          </p>
+    <PageTransition>
+      <div className="mx-auto max-w-screen-2xl px-6 space-y-10">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Cardápio</h1>
+            <p className="text-base text-muted-foreground">
+              Gerencie os produtos do seu restaurante
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => router.push("/dashboard/products/categories")}
+            >
+              <FolderOpen className="h-4 w-4" />
+              <span className="hidden sm:inline">Categorias</span>
+            </Button>
+            <Button
+              className="gap-2 flex-1 sm:flex-none"
+              onClick={handleCreate}
+            >
+              <Plus className="h-4 w-4" />
+              Novo Produto
+            </Button>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="gap-2 flex-1 sm:flex-none"
-            onClick={() => router.push("/dashboard/products/categories")}
-          >
-            <FolderOpen className="h-4 w-4" />
-            <span className="hidden sm:inline">Categorias</span>
-          </Button>
-          <Button className="gap-2 flex-1 sm:flex-none" onClick={handleCreate}>
-            <Plus className="h-4 w-4" />
-            Novo Produto
-          </Button>
-        </div>
-      </div>
+        {/* Filtros */}
+        <ProductFilters
+          filters={filters}
+          categories={categories}
+          onFiltersChange={setFilters}
+        />
 
-      {/* Filtros */}
-      <ProductFilters
-        filters={filters}
-        categories={categories}
-        onFiltersChange={setFilters}
-      />
-
-      {/* Lista de produtos */}
-      {isLoading ? (
-        <ProductsGridSkeleton count={8} />
-      ) : products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Package className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">
-            Nenhum produto encontrado
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-sm mb-4">
-            {filters.search ||
-            filters.category_id !== "all" ||
-            filters.is_available !== "all"
-              ? "Tente ajustar os filtros de busca"
-              : "Comece adicionando produtos ao seu cardápio"}
-          </p>
-          <Button className="gap-2" onClick={handleCreate}>
-            <Plus className="h-4 w-4" />
-            Adicionar Primeiro Produto
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onEdit={handleEdit}
-              onDelete={() => handleDeleteClick(product)}
-              onManageVariations={handleManageVariations}
-              onManageExtras={handleManageExtras}
+        {/* Lista de produtos */}
+        {isLoading ? (
+          <ProductsGridSkeleton count={8} />
+        ) : products.length === 0 ? (
+          // Verificar se é busca ou vazio real
+          filters.search ||
+          filters.category_id !== "all" ||
+          filters.is_available !== "all" ? (
+            <NoResultsState
+              searchQuery={filters.search || "filtros aplicados"}
+              onClear={() => {
+                setFilters({
+                  category_id: "all",
+                  search: "",
+                  is_available: "all",
+                });
+              }}
             />
-          ))}
-        </div>
-      )}
+          ) : (
+            <EmptyState
+              icon={Package}
+              title="Nenhum produto cadastrado"
+              description="Comece adicionando produtos ao seu cardápio para que seus clientes possam fazer pedidos."
+              action={{
+                label: "Adicionar primeiro produto",
+                onClick: handleCreate,
+              }}
+            />
+          )
+        ) : (
+          <StaggerContainer>
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {products.map((product) => (
+                <StaggerItem key={product.id}>
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onEdit={handleEdit}
+                    onDelete={() => handleDeleteClick(product)}
+                    onToggleAvailability={toggleAvailability}
+                    onManageVariations={handleManageVariations}
+                    onManageExtras={handleManageExtras}
+                  />
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
+        )}
 
-      {/* Dialog de confirmação de exclusão */}
-      <ConfirmDialog
-        open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
-        title="Excluir produto?"
-        description={`Deseja excluir "${deleteDialog.productName}"? 
-    
-Se o produto já foi vendido, ele será apenas desativado para preservar o histórico de pedidos. Caso contrário, será excluído permanentemente.`}
-        confirmText="Continuar"
-        cancelText="Cancelar"
-        onConfirm={confirmDelete}
-        variant="destructive"
-        isLoading={isDeleting}
-      />
+        {/* Dialog de confirmação de exclusão */}
+        <ConfirmDialog
+          open={deleteDialog.open}
+          onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+          title="Excluir produto?"
+          description={`Deseja excluir "${deleteDialog.productName}"? 
+      
+  Se o produto já foi vendido, ele será apenas desativado para preservar o histórico de pedidos. Caso contrário, será excluído permanentemente.`}
+          confirmText="Continuar"
+          cancelText="Cancelar"
+          onConfirm={confirmDelete}
+          variant="destructive"
+          isLoading={isDeleting}
+        />
 
-      {/* Dialog de criar/editar */}
-      <ProductDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        product={selectedProduct}
-        categories={categories}
-        onSave={handleSave}
-      />
+        {/* Dialog de criar/editar */}
+        <ProductDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          product={selectedProduct}
+          categories={categories}
+          onSave={handleSave}
+        />
 
-      {/* Dialog de variações */}
-      <ProductVariationsDialog
-        open={variationsDialogOpen}
-        onOpenChange={setVariationsDialogOpen}
-        product={selectedProductForVariations}
-      />
+        {/* Dialog de variações */}
+        <ProductVariationsDialog
+          open={variationsDialogOpen}
+          onOpenChange={setVariationsDialogOpen}
+          product={selectedProductForVariations}
+        />
 
-      {/* Dialog de extras */}
-      <ProductExtrasDialog
-        open={extrasDialogOpen}
-        onOpenChange={setExtrasDialogOpen}
-        product={selectedProductForExtras}
-      />
-    </div>
+        {/* Dialog de extras */}
+        <ProductExtrasDialog
+          open={extrasDialogOpen}
+          onOpenChange={setExtrasDialogOpen}
+          product={selectedProductForExtras}
+        />
+      </div>
+    </PageTransition>
   );
 }

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -20,7 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Ruler } from "lucide-react";
+import { EmptyStateCompact } from "../ui/empty-state";
 import { toast } from "sonner";
 import type { Product, ProductVariation } from "@/lib/types/product";
 import { CurrencyInput } from "../ui/currency-input";
@@ -32,9 +34,6 @@ interface ProductVariationsDialogProps {
   product: Product | null;
 }
 
-/**
- * Dialog para gerenciar variações de um produto
- */
 export function ProductVariationsDialog({
   open,
   onOpenChange,
@@ -51,9 +50,14 @@ export function ProductVariationsDialog({
     price: 0,
   });
 
-  /**
-   * Carrega variações do produto
-   */
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    variationId?: string;
+    variationName?: string;
+  }>({ open: false });
+
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const loadVariations = useCallback(async () => {
     if (!product) return;
 
@@ -77,129 +81,114 @@ export function ProductVariationsDialog({
     }
   }, [supabase, product]);
 
-  /**
-   * Adiciona nova variação
-   */
   const handleAdd = useCallback(async () => {
-    console.log("🔵 handleAdd chamado"); // ← DEBUG
-    console.log("Product:", product); // ← DEBUG
-    console.log("newVariation:", newVariation); // ← DEBUG
-
-    if (!product) {
-      console.log("❌ Sem produto"); // ← DEBUG
-      return;
-    }
+    if (!product) return;
 
     if (!newVariation.name.trim()) {
-      console.log("❌ Nome vazio"); // ← DEBUG
       toast.error("Nome da variação é obrigatório");
       return;
     }
 
-    console.log("✅ Validações passaram"); // ← DEBUG
-
     try {
       setIsSaving(true);
-      console.log("🔄 Salvando..."); // ← DEBUG
 
-      // Calcular próxima ordem
       const maxOrder =
         variations.length > 0
           ? Math.max(...variations.map((v) => v.display_order))
           : 0;
 
-      const dataToInsert = {
+      const { error } = await supabase.from("product_variations").insert({
         product_id: product.id,
         name: newVariation.name,
-        price: newVariation.price, // ✅ Certifique-se que é 'price'
+        price: newVariation.price,
         display_order: maxOrder + 1,
         is_available: true,
-      };
+      });
 
-      console.log("📦 Dados a inserir:", dataToInsert); // ← DEBUG
+      if (error) throw error;
 
-      const { data, error } = await supabase
-        .from("product_variations")
-        .insert(dataToInsert)
-        .select(); // ← ADICIONAR .select() para retornar dados
-
-      console.log("📊 Resultado:", { data, error }); // ← DEBUG
-
-      if (error) {
-        console.error("❌ Erro do Supabase:", error); // ← DEBUG
-        throw error;
-      }
-
-      console.log("✅ Variação inserida:", data); // ← DEBUG
       toast.success("Variação adicionada!");
       setNewVariation({ name: "", price: 0 });
-      await loadVariations();
-      console.log("✅ Lista recarregada"); // ← DEBUG
+      loadVariations();
     } catch (error) {
-      console.error("💥 Erro capturado:", error); // ← DEBUG
       logger.error("Erro ao adicionar variação:", error);
       toast.error("Erro ao adicionar variação");
     } finally {
       setIsSaving(false);
-      console.log("🏁 handleAdd finalizado"); // ← DEBUG
     }
   }, [supabase, product, variations, newVariation, loadVariations]);
 
-  /**
-   * Deleta variação
-   */
-  const handleDelete = useCallback(
-    async (variationId: string) => {
-      if (!confirm("Tem certeza que deseja excluir esta variação?")) {
-        return;
-      }
+  const handleDeleteClick = useCallback((variation: ProductVariation) => {
+    setDeleteDialog({
+      open: true,
+      variationId: variation.id,
+      variationName: variation.name,
+    });
+  }, []);
 
-      try {
-        const { error } = await supabase
-          .from("product_variations")
-          .delete()
-          .eq("id", variationId);
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog.variationId) return;
 
-        if (error) throw error;
+    try {
+      setIsDeleting(true);
 
-        toast.success("Variação excluída!");
-        loadVariations();
-      } catch (error) {
-        logger.error("Erro ao excluir variação:", error);
-        toast.error("Erro ao excluir variação");
-      }
-    },
-    [supabase, loadVariations]
-  );
+      const { error } = await supabase
+        .from("product_variations")
+        .delete()
+        .eq("id", deleteDialog.variationId);
 
-  /**
-   * Toggle disponibilidade
-   */
+      if (error) throw error;
+
+      toast.success("Variação excluída!");
+      loadVariations();
+      setDeleteDialog({ open: false });
+    } catch (error) {
+      logger.error("Erro ao excluir variação:", error);
+      toast.error("Erro ao excluir variação");
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteDialog.variationId, supabase, loadVariations]);
+
   const toggleAvailable = useCallback(
     async (variation: ProductVariation) => {
+      // 1. Atualizar UI imediatamente
+      setVariations((prev) =>
+        prev.map((v) =>
+          v.id === variation.id ? { ...v, is_available: !v.is_available } : v
+        )
+      );
+
+      // 2. Toast imediato
+      toast.success(
+        variation.is_available ? "Variação desativada" : "Variação ativada"
+      );
+
       try {
+        // 3. Enviar para servidor
         const { error } = await supabase
           .from("product_variations")
           .update({ is_available: !variation.is_available })
           .eq("id", variation.id);
 
         if (error) throw error;
-
-        toast.success(
-          variation.is_available ? "Variação desativada" : "Variação ativada"
-        );
-        loadVariations();
       } catch (error) {
+        // 4. Reverter em caso de erro
+        setVariations((prev) =>
+          prev.map((v) =>
+            v.id === variation.id
+              ? { ...v, is_available: variation.is_available }
+              : v
+          )
+        );
+
         logger.error("Erro ao atualizar variação:", error);
         toast.error("Erro ao atualizar variação");
       }
     },
-    [supabase, loadVariations]
+    [supabase]
   );
 
-  /**
-   * Formata valor monetário
-   */
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -254,17 +243,9 @@ export function ProductVariationsDialog({
             </Button>
           </div>
 
-          {/* ATUALIZAR DESCRIÇÃO */}
           <p className="text-xs text-muted-foreground">
-            Preço específico desta variação
+            Preço específico desta variação (não afeta o preço base do produto)
           </p>
-
-          <TableBody>
-            {variations.map((variation) => (
-              <TableRow key={variation.id}>
-              </TableRow>
-            ))}
-          </TableBody>
 
           {/* Lista de variações */}
           {isLoading ? (
@@ -272,19 +253,18 @@ export function ProductVariationsDialog({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : variations.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">Nenhuma variação cadastrada</p>
-              <p className="text-xs mt-1">
-                Adicione variações como tamanhos diferentes
-              </p>
-            </div>
+            <EmptyStateCompact
+              icon={Ruler}
+              title="Nenhuma variação cadastrada"
+              description="Adicione variações como tamanhos diferentes (P/M/G) para este produto"
+            />
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nome</TableHead>
-                    <TableHead>Preço Final</TableHead>
+                    <TableHead>Preço</TableHead>
                     <TableHead className="w-24">Ativo</TableHead>
                     <TableHead className="w-16"></TableHead>
                   </TableRow>
@@ -309,7 +289,7 @@ export function ProductVariationsDialog({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => handleDelete(variation.id)}
+                          onClick={() => handleDeleteClick(variation)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -321,6 +301,19 @@ export function ProductVariationsDialog({
             </div>
           )}
         </div>
+
+        {/* Dialog de confirmação */}
+        <ConfirmDialog
+          open={deleteDialog.open}
+          onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+          title="Excluir variação?"
+          description={`Tem certeza que deseja excluir "${deleteDialog.variationName}"? Esta ação não pode ser desfeita.`}
+          confirmText="Excluir variação"
+          cancelText="Cancelar"
+          onConfirm={confirmDelete}
+          variant="destructive"
+          isLoading={isDeleting}
+        />
       </DialogContent>
     </Dialog>
   );

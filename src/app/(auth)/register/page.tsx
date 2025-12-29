@@ -68,35 +68,37 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Sidebar */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-sidebar p-12 text-sidebar-foreground">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-foreground p-12 text-sidebar-foreground">
         <Logo className="text-sidebar-foreground dark" />
 
-        <blockquote className="space-y-2">
-          <p className="text-lg leading-relaxed">
+        <blockquote className="space-y-2 max-w-md">
+          <p className="text-lg leading-relaxed text-muted">
             {'"'}O Platoo revolucionou a forma como gerenciamos nossos pedidos.
             A integração com WhatsApp trouxe muito mais agilidade no atendimento.{'"'}
           </p>
-          <footer className="text-sm text-sidebar-foreground/70">
+          <footer className="text-sm text-muted/70">
             Maria Santos — Chef e Proprietária, Bistrô Aconchego
           </footer>
         </blockquote>
 
-        <p className="text-xs text-sidebar-foreground/50">
+        <p className="text-xs text-muted/50">
           © 2025 Platoo. Todos os direitos reservados.
         </p>
       </div>
 
       {/* Form */}
-      <div className="flex w-full items-center justify-center p-8 lg:w-1/2">
+      <div className="flex w-full flex-1 items-center justify-center px-4 py-10 sm:px-6 lg:w-1/2 lg:p-8">
         <div className="w-full max-w-md space-y-8">
+          {/* Logo mobile */}
           <div className="lg:hidden">
             <Logo />
           </div>
 
+          {/* Header */}
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
               Criar sua conta
             </h1>
             <p className="text-muted-foreground">
@@ -120,7 +122,7 @@ export default function RegisterPage() {
                 onChange={e =>
                   setFormData({ ...formData, fullName: e.target.value })
                 }
-                className="w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border px-3 py-2 text-sm"
               />
             </div>
 
@@ -138,7 +140,7 @@ export default function RegisterPage() {
                     restaurantName: e.target.value
                   })
                 }
-                className="w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border px-3 py-2 text-sm"
               />
             </div>
 
@@ -151,7 +153,7 @@ export default function RegisterPage() {
                 onChange={e =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                className="w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border px-3 py-2 text-sm"
               />
             </div>
 
@@ -165,7 +167,7 @@ export default function RegisterPage() {
                 onChange={e =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                className="w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border px-3 py-2 text-sm"
               />
             </div>
 

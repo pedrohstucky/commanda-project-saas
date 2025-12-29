@@ -41,8 +41,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${geistMono.variable}`}>
-      <body className={inter.className}>
+    <html
+      lang="pt-BR"
+      className={`${inter.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-screen bg-background text-foreground antialiased overflow-x-hidden">
         {children}
       </body>
     </html>

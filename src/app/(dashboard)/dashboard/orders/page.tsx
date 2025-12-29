@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileText, PackageX } from "lucide-react";
-
+import { toastWithAction } from "@/lib/toast-helpers";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { exportToCSV, exportToPDF } from "@/lib/utils/export";
+import { StaggerContainer, StaggerItem } from "@/components/ui/animations";
 import { logger } from "@/lib/logger";
 
 import {
@@ -19,6 +20,8 @@ import { OrderCard } from "@/components/orders/order-card";
 import { OrderFilters } from "@/components/orders/order-filters";
 import { OrderPagination } from "@/components/orders/order-pagination";
 import { OrdersGridSkeleton } from "@/components/ui/skeleton-patterns";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState, NoResultsState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import type {
   Order,
@@ -60,6 +63,14 @@ export default function OrdersPage() {
     completed: 0,
     cancelled: 0,
   });
+
+  const [rejectDialog, setRejectDialog] = useState<{
+    open: boolean;
+    orderId?: string;
+    customerName?: string;
+  }>({ open: false });
+
+  const [isRejecting, setIsRejecting] = useState(false);
 
   /**
    * Carrega contadores por status
@@ -199,6 +210,25 @@ export default function OrdersPage() {
    */
   const handleAccept = useCallback(
     async (orderId: string) => {
+      // 1. Optimistic update
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? { ...order, status: "preparing" as const }
+            : order
+        )
+      );
+
+      // 2. Toast com ação de ver pedido
+      toastWithAction(
+        "Pedido aceito!",
+        "Ver pedido",
+        () => router.push(`/dashboard/orders/${orderId}`),
+        {
+          description: "O pedido está sendo preparado.",
+        }
+      );
+
       try {
         setActionLoading(orderId);
 
@@ -211,53 +241,60 @@ export default function OrdersPage() {
         if (!response.ok || !result.success) {
           throw new Error(result.error);
         }
-
-        toast.success("Pedido aceito!", {
-          description: "O pedido está agora em preparo.",
-        });
-
-        loadOrders();
       } catch (error) {
+        // Reverter optimistic update
+        loadOrders();
         logger.error("Erro ao aceitar pedido", error);
         toast.error("Erro ao aceitar pedido");
       } finally {
         setActionLoading(null);
       }
     },
-    [loadOrders]
+    [loadOrders, router]
   );
 
-  const handleReject = useCallback(
-    async (orderId: string) => {
-      try {
-        setActionLoading(orderId);
+  const handleRejectClick = useCallback((order: Order) => {
+    setRejectDialog({
+      open: true,
+      orderId: order.id,
+      customerName: order.customer_name || "Cliente",
+    });
+  }, []);
 
-        const response = await fetch(`/api/orders/${orderId}/reject`, {
+  const confirmReject = useCallback(async () => {
+    if (!rejectDialog.orderId) return;
+
+    try {
+      setIsRejecting(true);
+
+      const response = await fetch(
+        `/api/orders/${rejectDialog.orderId}/reject`,
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: "Recusado pelo atendente" }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(result.error);
         }
+      );
 
-        toast.success("Pedido recusado", {
-          description: "O pedido foi cancelado.",
-        });
+      const result = await response.json();
 
-        loadOrders();
-      } catch (error) {
-        logger.error("Erro ao recusar pedido", error);
-        toast.error("Erro ao recusar pedido");
-      } finally {
-        setActionLoading(null);
+      if (!response.ok || !result.success) {
+        throw new Error(result.error);
       }
-    },
-    [loadOrders]
-  );
+
+      toast.success("Pedido recusado", {
+        description: "O cliente será notificado.",
+      });
+
+      loadOrders();
+      setRejectDialog({ open: false });
+    } catch (error) {
+      logger.error("Erro ao recusar pedido", error);
+      toast.error("Erro ao recusar pedido");
+    } finally {
+      setIsRejecting(false);
+    }
+  }, [rejectDialog.orderId, loadOrders]);
 
   const handleComplete = useCallback(
     async (orderId: string) => {
@@ -402,39 +439,51 @@ export default function OrdersPage() {
       </div>
 
       {/* Conteúdo */}
-      {/* Conteúdo */}
       {isLoading ? (
         // ✅ NOVO: Skeleton ao invés de spinner
         <OrdersGridSkeleton count={9} />
       ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <PackageX className="mb-4 h-16 w-16 text-muted-foreground" />
-          <h3 className="mb-2 text-lg font-semibold">
-            Nenhum pedido encontrado
-          </h3>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            {filters.status !== "all" || filters.search
-              ? "Tente ajustar os filtros de busca"
-              : "Aguardando novos pedidos..."}
-          </p>
-        </div>
+        // Verificar se é busca ou vazio real
+        filters.status !== "all" || filters.search ? (
+          <NoResultsState
+            searchQuery={filters.search || `filtro: ${filters.status}`}
+            onClear={() => {
+              setFilters({ status: "all", search: "" });
+              setPagination((prev) => ({ ...prev, page: 1 }));
+            }}
+          />
+        ) : (
+          <EmptyState
+            icon={PackageX}
+            title="Nenhum pedido ainda"
+            description="Seus pedidos aparecerão aqui quando os clientes fizerem pedidos via WhatsApp."
+            action={{
+              label: "Ver tutoriais",
+              onClick: () =>
+                window.open("https://docs.platoo.com.br/tutoriais", "_blank"),
+            }}
+          />
+        )
       ) : (
         <div className="space-y-6">
           {/* Lista */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {orders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onAccept={handleAccept}
-                onReject={handleReject}
-                onComplete={handleComplete}
-                onClick={handleOrderClick}
-                isLoading={actionLoading === order.id}
-              />
-            ))}
-          </div>
-
+          <StaggerContainer>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {orders.map((order) => (
+                <StaggerItem key={order.id}>
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    onAccept={handleAccept}
+                    onReject={() => handleRejectClick(order)}
+                    onComplete={handleComplete}
+                    onClick={handleOrderClick}
+                    isLoading={actionLoading === order.id}
+                  />
+                </StaggerItem>
+              ))}
+            </div>
+          </StaggerContainer>
           {/* Paginação */}
           <OrderPagination
             currentPage={pagination.page}
@@ -443,6 +492,19 @@ export default function OrdersPage() {
             onPageChange={(page) =>
               setPagination((prev) => ({ ...prev, page }))
             }
+          />
+
+          {/* Dialog de confirmação de rejeição */}
+          <ConfirmDialog
+            open={rejectDialog.open}
+            onOpenChange={(open) => setRejectDialog({ ...rejectDialog, open })}
+            title="Recusar pedido?"
+            description={`Tem certeza que deseja recusar o pedido de ${rejectDialog.customerName}? O cliente será notificado via WhatsApp.`}
+            confirmText="Recusar pedido"
+            cancelText="Cancelar"
+            onConfirm={confirmReject}
+            variant="destructive"
+            isLoading={isRejecting}
           />
         </div>
       )}

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import { logger } from "@/lib/logger"
 
-import { logger } from "@/lib/logger";
 export default function ForgotPasswordPage() {
   const supabase = createBrowserSupabaseClient()
   const [email, setEmail] = useState("")
@@ -31,8 +31,8 @@ export default function ForgotPasswordPage() {
 
       setSuccess(true)
     } catch (error) {
-      logger.error('Erro:', error)
-      setError('Erro ao enviar email. Tente novamente.')
+      logger.error("Erro:", error)
+      setError("Erro ao enviar email. Tente novamente.")
     } finally {
       setIsLoading(false)
     }
@@ -40,15 +40,19 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8">
+      <div className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-md space-y-8 text-center">
           <Logo className="mx-auto" />
+
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold">Email enviado!</h1>
+            <h1 className="text-2xl font-bold sm:text-3xl">
+              Email enviado!
+            </h1>
             <p className="text-muted-foreground">
               Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
             </p>
           </div>
+
           <Button asChild className="w-full">
             <Link href="/login">
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -61,11 +65,13 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-8">
+    <div className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
       <div className="w-full max-w-md space-y-8">
         <div className="space-y-2">
           <Logo />
-          <h1 className="text-2xl font-bold tracking-tight">Esqueceu sua senha?</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Esqueceu sua senha?
+          </h1>
           <p className="text-muted-foreground">
             Digite seu email e enviaremos instruções para redefinir sua senha.
           </p>

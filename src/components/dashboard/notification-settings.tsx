@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Bell, BellOff, Volume2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
-
 import { logger } from "@/lib/logger";
 /**
  * Componente para configurar notificações

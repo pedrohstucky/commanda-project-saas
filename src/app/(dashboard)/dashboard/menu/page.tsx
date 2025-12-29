@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { MenuSettingsSkeleton } from "@/components/ui/skeleton-patterns";
 import {
   Card,
   CardContent,
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Copy, Check, AlertCircle } from "lucide-react";
+import { ExternalLink, Copy, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import type { MenuSettings } from "@/lib/types/menu";
@@ -52,16 +53,12 @@ export default function MenuSettingsPage() {
     },
   });
 
-  /**
-   * Atualiza o título da página
-   */
+  /* Título */
   useEffect(() => {
     document.title = "Cardápio Digital - Dashboard";
   }, []);
 
-  /**
-   * Gera slug único
-   */
+  /* Gerar slug */
   const generateSlug = async (tenantName: string, currentTenantId: string) => {
     try {
       const { data, error } = await supabase.rpc("generate_unique_slug", {
@@ -73,7 +70,6 @@ export default function MenuSettingsPage() {
 
       setSettings((prev) => ({ ...prev, slug: data }));
 
-      // Salvar no banco
       await supabase
         .from("tenants")
         .update({ slug: data })
@@ -87,9 +83,7 @@ export default function MenuSettingsPage() {
     }
   };
 
-  /**
-   * Carrega configurações atuais
-   */
+  /* Carregar configurações */
   const loadSettings = async () => {
     try {
       setIsLoading(true);
@@ -125,25 +119,11 @@ export default function MenuSettingsPage() {
           menu_enabled: tenant.menu_enabled || false,
           theme_color: tenant.theme_color || "#ea580c",
           whatsapp_number: tenant.whatsapp_number || "",
-          opening_hours: tenant.opening_hours || {
-            monday: { open: "08:00", close: "22:00" },
-            tuesday: { open: "08:00", close: "22:00" },
-            wednesday: { open: "08:00", close: "22:00" },
-            thursday: { open: "08:00", close: "22:00" },
-            friday: { open: "08:00", close: "22:00" },
-            saturday: { open: "08:00", close: "23:00" },
-            sunday: { open: "10:00", close: "22:00" },
-          },
-          welcome_message:
-            tenant.welcome_message || "Bem-vindo ao nosso cardápio digital!",
-          social_links: tenant.social_links || {
-            instagram: "",
-            facebook: "",
-            website: "",
-          },
+          opening_hours: tenant.opening_hours,
+          welcome_message: tenant.welcome_message,
+          social_links: tenant.social_links,
         });
       } else {
-        // Gerar slug inicial se não tiver
         await generateSlug(tenant.name, profile.tenant_id);
       }
     } catch (error) {
@@ -154,21 +134,20 @@ export default function MenuSettingsPage() {
     }
   };
 
-  /**
-   * Salva configurações
-   */
+  /* Salvar */
   const handleSave = async () => {
     try {
       setIsSaving(true);
 
-      // Validações
       if (!settings.slug.trim()) {
         toast.error("URL é obrigatória");
         return;
       }
 
       if (settings.menu_enabled && !settings.whatsapp_number.trim()) {
-        toast.error("Número do WhatsApp é obrigatório para ativar o cardápio");
+        toast.error(
+          "Número do WhatsApp é obrigatório para ativar o cardápio"
+        );
         return;
       }
 
@@ -196,9 +175,7 @@ export default function MenuSettingsPage() {
     }
   };
 
-  /**
-   * Copia URL do cardápio
-   */
+  /* Copiar URL */
   const handleCopyUrl = () => {
     const url = `${window.location.origin}/cardapio/${settings.slug}`;
     navigator.clipboard.writeText(url);
@@ -207,29 +184,20 @@ export default function MenuSettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  /**
-   * Carrega settings ao montar
-   */
   useEffect(() => {
     loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <MenuSettingsSkeleton />;
   }
 
   const isPremium = subscriptionPlan === "premium";
-  const menuUrl = `${
-    typeof window !== "undefined" ? window.location.origin : ""
-  }/cardapio/${settings.slug}`;
+  const menuUrl = `${window.location.origin}/cardapio/${settings.slug}`;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 space-y-8">
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 space-y-8 overflow-x-hidden">
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -246,9 +214,11 @@ export default function MenuSettingsPage() {
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="pt-6">
             <div className="flex gap-3">
-              <AlertCircle className="h-5 w-5 text-orange-600 mt-1" />
+              <AlertCircle className="h-5 w-5 text-orange-600 mt-1 shrink-0" />
               <div className="space-y-1">
-                <p className="font-semibold text-orange-900">Recurso Premium</p>
+                <p className="font-semibold text-orange-900">
+                  Recurso Premium
+                </p>
                 <p className="text-sm text-orange-700">
                   O Cardápio Digital está disponível apenas no plano Premium.
                 </p>
@@ -258,13 +228,12 @@ export default function MenuSettingsPage() {
         </Card>
       )}
 
-      {/* Status + URL */}
+      {/* Status */}
       <Card>
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-between">
+        <CardHeader className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Status do Cardápio</CardTitle>
             <Badge
-              className="px-3 py-1"
               variant={settings.menu_enabled ? "default" : "secondary"}
             >
               {settings.menu_enabled ? "Ativo" : "Inativo"}
@@ -276,8 +245,7 @@ export default function MenuSettingsPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Switch */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
             <div>
               <p className="font-medium">Cardápio Público</p>
               <p className="text-sm text-muted-foreground">
@@ -293,17 +261,15 @@ export default function MenuSettingsPage() {
             />
           </div>
 
-          {/* URL */}
           <div className="space-y-2">
             <Label>URL do Cardápio</Label>
             <div className="relative">
-              <Input value={menuUrl} readOnly className="pr-24" />
+              <Input value={menuUrl} readOnly className="pr-28" />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={handleCopyUrl}
-                  disabled={!settings.slug}
                 >
                   {copied ? (
                     <Check className="h-4 w-4 text-green-600" />
@@ -323,7 +289,6 @@ export default function MenuSettingsPage() {
             </div>
           </div>
 
-          {/* Slug */}
           <div className="space-y-2">
             <Label>URL Personalizada</Label>
             <div className="flex">
@@ -332,6 +297,7 @@ export default function MenuSettingsPage() {
               </span>
               <Input
                 value={settings.slug}
+                disabled={!isPremium}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
@@ -341,7 +307,6 @@ export default function MenuSettingsPage() {
                   })
                 }
                 className="rounded-l-none"
-                disabled={!isPremium}
               />
             </div>
             <p className="text-xs text-muted-foreground">
@@ -351,7 +316,7 @@ export default function MenuSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Grid de Configurações */}
+      {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Personalização */}
         <Card>
@@ -369,14 +334,20 @@ export default function MenuSettingsPage() {
                   value={settings.theme_color}
                   disabled={!isPremium}
                   onChange={(e) =>
-                    setSettings({ ...settings, theme_color: e.target.value })
+                    setSettings({
+                      ...settings,
+                      theme_color: e.target.value,
+                    })
                   }
                 />
                 <Input
                   value={settings.theme_color}
                   disabled={!isPremium}
                   onChange={(e) =>
-                    setSettings({ ...settings, theme_color: e.target.value })
+                    setSettings({
+                      ...settings,
+                      theme_color: e.target.value,
+                    })
                   }
                 />
               </div>
@@ -389,7 +360,10 @@ export default function MenuSettingsPage() {
                 value={settings.welcome_message}
                 disabled={!isPremium}
                 onChange={(e) =>
-                  setSettings({ ...settings, welcome_message: e.target.value })
+                  setSettings({
+                    ...settings,
+                    welcome_message: e.target.value,
+                  })
                 }
               />
             </div>
@@ -400,7 +374,9 @@ export default function MenuSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Contato</CardTitle>
-            <CardDescription>WhatsApp e redes sociais</CardDescription>
+            <CardDescription>
+              WhatsApp e redes sociais
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -420,24 +396,26 @@ export default function MenuSettingsPage() {
 
             <Separator />
 
-            {(["instagram", "facebook", "website"] as const).map((field) => (
-              <div key={field} className="space-y-2">
-                <Label className="capitalize">{field}</Label>
-                <Input
-                  value={settings.social_links[field]}
-                  disabled={!isPremium}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      social_links: {
-                        ...settings.social_links,
-                        [field]: e.target.value,
-                      },
-                    })
-                  }
-                />
-              </div>
-            ))}
+            {(["instagram", "facebook", "website"] as const).map(
+              (field) => (
+                <div key={field} className="space-y-2">
+                  <Label className="capitalize">{field}</Label>
+                  <Input
+                    value={settings.social_links[field]}
+                    disabled={!isPremium}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        social_links: {
+                          ...settings.social_links,
+                          [field]: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )
+            )}
           </CardContent>
         </Card>
       </div>

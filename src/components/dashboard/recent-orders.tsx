@@ -1,15 +1,16 @@
-"use client";
+"use client"
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, PackageX } from "lucide-react";
+import { EmptyStateCompact } from "../ui/empty-state";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@/lib/types/order";
 import { logger } from "@/lib/logger";
-import { toast } from "sonner"
+import { toast } from "sonner";
 import { RecentOrdersSkeleton } from "../ui/skeleton-patterns";
 
 interface OrderRow {
@@ -21,10 +22,10 @@ interface OrderRow {
 }
 
 function isValidUUID(id: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-  return uuidRegex.test(id)
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
 }
-
 
 export function RecentOrders() {
   const supabase = createBrowserSupabaseClient();
@@ -111,15 +112,17 @@ export function RecentOrders() {
     }
   };
 
-  const handleOrderClick = useCallback((orderId: string) => {
-    if (!isValidUUID(orderId)) {
-      logger.error('ID de pedido inválido', { orderId })
-      toast.error('ID de pedido inválido')
-      return
-    }
-    router.push(`/dashboard/orders/${orderId}`)
-  }, [router])
-  
+  const handleOrderClick = useCallback(
+    (orderId: string) => {
+      if (!isValidUUID(orderId)) {
+        logger.error("ID de pedido inválido", { orderId });
+        toast.error("ID de pedido inválido");
+        return;
+      }
+      router.push(`/dashboard/orders/${orderId}`);
+    },
+    [router]
+  );
 
   return (
     <Card>
@@ -139,9 +142,11 @@ export function RecentOrders() {
         {isLoading ? (
           <RecentOrdersSkeleton />
         ) : orders.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Nenhum pedido ainda
-          </div>
+          <EmptyStateCompact
+            icon={PackageX}
+            title="Nenhum pedido recente"
+            description="Seus pedidos aparecerão aqui assim que chegarem"
+          />
         ) : (
           <div className="space-y-3">
             {orders.map((order) => (

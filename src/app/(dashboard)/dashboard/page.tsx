@@ -17,10 +17,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-bold">
+          Dashboard
+        </h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           Visão geral do seu restaurante
         </p>

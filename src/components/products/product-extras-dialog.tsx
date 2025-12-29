@@ -20,9 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus as PlusIcon, Trash2, Loader2 } from "lucide-react";
+import { EmptyStateCompact } from "../ui/empty-state";
 import { toast } from "sonner";
 import type { Product, ProductExtra } from "@/lib/types/product";
+import { ConfirmDialog } from "../ui/confirm-dialog";
 import { CurrencyInput } from "../ui/currency-input";
 
 import { logger } from "@/lib/logger";
@@ -50,6 +52,14 @@ export function ProductExtrasDialog({
     name: "",
     price: 0,
   });
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    extraId?: string;
+    extraName?: string;
+  }>({ open: false });
+
+  const [isDeleting, setIsDeleting] = useState(false);
 
   /**
    * Carrega extras do produto
@@ -122,53 +132,74 @@ export function ProductExtrasDialog({
   /**
    * Deleta extra
    */
-  const handleDelete = useCallback(
-    async (extraId: string) => {
-      if (!confirm("Tem certeza que deseja excluir este extra?")) {
-        return;
-      }
+  const handleDeleteClick = useCallback((extra: ProductExtra) => {
+    setDeleteDialog({
+      open: true,
+      extraId: extra.id,
+      extraName: extra.name,
+    });
+  }, []);
 
-      try {
-        const { error } = await supabase
-          .from("product_extras")
-          .delete()
-          .eq("id", extraId);
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog.extraId) return;
 
-        if (error) throw error;
+    try {
+      setIsDeleting(true);
 
-        toast.success("Extra excluído!");
-        loadExtras();
-      } catch (error) {
-        logger.error("Erro ao excluir extra:", error);
-        toast.error("Erro ao excluir extra");
-      }
-    },
-    [supabase, loadExtras]
-  );
+      const { error } = await supabase
+        .from("product_extras")
+        .delete()
+        .eq("id", deleteDialog.extraId);
+
+      if (error) throw error;
+
+      toast.success("Extra excluído!");
+      loadExtras();
+      setDeleteDialog({ open: false });
+    } catch (error) {
+      logger.error("Erro ao excluir extra:", error);
+      toast.error("Erro ao excluir extra");
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteDialog.extraId, supabase, loadExtras]);
 
   /**
    * Toggle disponibilidade
    */
   const toggleAvailable = useCallback(
     async (extra: ProductExtra) => {
+      // 1. Atualizar UI imediatamente
+      setExtras((prev) =>
+        prev.map((e) =>
+          e.id === extra.id ? { ...e, is_available: !e.is_available } : e
+        )
+      );
+
+      // 2. Toast imediato
+      toast.success(extra.is_available ? "Extra desativado" : "Extra ativado");
+
       try {
+        // 3. Enviar para servidor
         const { error } = await supabase
           .from("product_extras")
           .update({ is_available: !extra.is_available })
           .eq("id", extra.id);
 
         if (error) throw error;
-
-        toast.success(
-          extra.is_available ? "Extra desativado" : "Extra ativado"
-        );
-        loadExtras();
       } catch (error) {
+        // 4. Reverter em caso de erro
+        setExtras((prev) =>
+          prev.map((e) =>
+            e.id === extra.id ? { ...e, is_available: extra.is_available } : e
+          )
+        );
+
         logger.error("Erro ao atualizar extra:", error);
         toast.error("Erro ao atualizar extra");
       }
     },
-    [supabase, loadExtras]
+    [supabase]
   );
 
   /**
@@ -299,9 +330,7 @@ export function ProductExtrasDialog({
             />
             <CurrencyInput
               value={newExtra.price || 0}
-              onChange={(value) =>
-                setNewExtra({ ...newExtra, price: value })
-              }
+              onChange={(value) => setNewExtra({ ...newExtra, price: value })}
               placeholder="R$ 0,00"
             />
 
@@ -309,7 +338,7 @@ export function ProductExtrasDialog({
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <PlusIcon className="h-4 w-4" />
               )}
               Adicionar
             </Button>
@@ -321,12 +350,11 @@ export function ProductExtrasDialog({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : extras.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">Nenhum extra cadastrado</p>
-              <p className="text-xs mt-1">
-                Adicione complementos opcionais para este produto
-              </p>
-            </div>
+            <EmptyStateCompact
+              icon={PlusIcon}
+              title="Nenhum extra cadastrado"
+              description="Adicione complementos opcionais como bacon, queijo extra, etc."
+            />
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>
@@ -358,7 +386,7 @@ export function ProductExtrasDialog({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => handleDelete(extra.id)}
+                          onClick={() => handleDeleteClick(extra)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -370,6 +398,19 @@ export function ProductExtrasDialog({
             </div>
           )}
         </div>
+
+        {/* Dialog de confirmação de exclusão */}
+        <ConfirmDialog
+          open={deleteDialog.open}
+          onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+          title="Excluir extra?"
+          description={`Tem certeza que deseja excluir "${deleteDialog.extraName}"? Esta ação não pode ser desfeita.`}
+          confirmText="Excluir extra"
+          cancelText="Cancelar"
+          onConfirm={confirmDelete}
+          variant="destructive"
+          isLoading={isDeleting}
+        />
       </DialogContent>
     </Dialog>
   );

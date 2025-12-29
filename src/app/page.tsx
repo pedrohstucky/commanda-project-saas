@@ -47,24 +47,24 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* HEADER */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-background">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Logo />
 
           <nav className="hidden items-center gap-6 md:flex">
-            <Link href="#features" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link href="#features" className="text-sm text-primary/80 hover:text-primary">
               Recursos
             </Link>
-            <Link href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link href="#how-it-works" className="text-sm text-primary/80 hover:text-primary">
               Como funciona
             </Link>
-            <Link href="#pricing" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link href="#pricing" className="text-sm text-primary/80 hover:text-primary">
               Preços
             </Link>
           </nav>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" asChild>
+            <Button asChild className="bg-secondary text-secondary-foreground hover:bg-muted hover:text-primary">
               <Link href="/login">Entrar</Link>
             </Button>
             <Button asChild>
@@ -85,7 +85,7 @@ export default function LandingPage() {
             </div>
             <h1 className="mb-6 text-balance text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
               Gerencie pedidos do seu restaurante com{" "}
-              <span className="text-green-700">WhatsApp</span>
+              <span className="text-primary">WhatsApp</span>
             </h1>
             <p className="mb-8 text-pretty text-lg text-muted-foreground md:text-xl">
               Receba pedidos diretamente no WhatsApp do seu restaurante,
@@ -114,10 +114,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             {[
-              { value: "500+", label: "Restaurantes ativos" },
-              { value: "50mil", label: "Pedidos processados" },
+              { value: "200+", label: "Restaurantes ativos" },
+              { value: "20mil+", label: "Pedidos processados" },
               { value: "98%", label: "Taxa de satisfação" },
-              { value: "3min", label: "Tempo médio de resposta" },
+              { value: "2min", label: "Tempo médio de resposta" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-3xl font-bold text-primary md:text-4xl">
@@ -279,10 +279,9 @@ export default function LandingPage() {
 
               <ul className="mb-8 space-y-3">
                 {[
-                  "Até 80 pedidos/mês",
+                  "Até 300 pedidos/mês",
                   "Usuário adicional",
                   "Integração WhatsApp",
-                  "Cardápio digital",
                   "Métricas Básicas",
                   "Suporte por email",
                 ].map((feature) => (
@@ -322,10 +321,9 @@ export default function LandingPage() {
 
               <ul className="mb-8 space-y-3">
                 {[
-                  "Até 200 pedidos/mês",
+                  "Até 1000 pedidos/mês",
                   "5 usuários",
                   "Integração WhatsApp",
-                  "Cardápio digital",
                   "Métricas avançadas",
                   "Suporte por WhatsApp",
                 ].map((feature) => (
@@ -362,7 +360,7 @@ export default function LandingPage() {
                   "Integração WhatsApp",
                   "Cardápio digital",
                   "Métricas Completas",
-                  "Suporte prioritário",
+                  "Suporte Prioritário",
                 ].map((feature) => (
                   <li key={feature} className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="h-4 w-4 text-primary" />

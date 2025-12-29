@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Search, ShoppingCart, Phone, Instagram, Facebook, Globe as WebIcon, Minus, Plus, Trash2 } from "lucide-react"
+import { PublicMenuSkeleton } from "@/components/ui/skeleton-patterns"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -377,14 +378,7 @@ export default function MenuPublicClient({ slug }: MenuPublicClientProps) {
   /* -------------------------------------------------------------------------- */
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">Carregando cardápio...</p>
-        </div>
-      </div>
-    )
+    return <PublicMenuSkeleton />
   }
 
   if (!menuData) {

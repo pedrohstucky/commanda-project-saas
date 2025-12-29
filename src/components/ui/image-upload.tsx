@@ -56,6 +56,11 @@ export function ImageUpload({
       try {
         setIsUploading(true);
 
+        // ✅ CRIAR TOAST DE UPLOAD
+        const uploadToast = toast.loading(`Enviando ${file.name}...`, {
+          description: "Preparando...",
+        });
+
         // Criar preview local
         const previewUrl = URL.createObjectURL(file);
         setPreview(previewUrl);
@@ -64,11 +69,22 @@ export function ImageUpload({
         let fileToUpload = file;
         if (compress) {
           try {
+            toast.loading(`Enviando ${file.name}...`, {
+              id: uploadToast,
+              description: "Comprimindo imagem...",
+            });
+
             fileToUpload = await compressImage(file, 1200, 0.8);
           } catch (error) {
             logger.warn("⚠️ Erro ao comprimir, usando original:", error);
           }
         }
+
+        // ✅ ATUALIZAR PROGRESSO
+        toast.loading(`Enviando ${file.name}...`, {
+          id: uploadToast,
+          description: "Fazendo upload...",
+        });
 
         // Fazer upload
         const result = await uploadProductImage(fileToUpload, tenantId, {
@@ -86,16 +102,23 @@ export function ImageUpload({
         setPreview(result.url);
         onChange(result.url);
 
-        toast.success("Imagem enviada com sucesso!");
+        // ✅ TOAST DE SUCESSO
+        toast.success("Upload concluído!", {
+          id: uploadToast,
+          description: file.name,
+        });
       } catch (error) {
         logger.error("❌ Erro ao fazer upload:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Erro ao fazer upload"
-        );
+
+        // ✅ TOAST DE ERRO
+        toast.error("Erro no upload", {
+          description:
+            error instanceof Error ? error.message : "Erro ao fazer upload",
+        });
+
         setPreview(value || null);
       } finally {
         setIsUploading(false);
-        // Limpar input
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }

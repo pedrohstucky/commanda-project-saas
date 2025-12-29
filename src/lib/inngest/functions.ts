@@ -1,5 +1,4 @@
 import { inngest } from "./client";
-
 import { logger } from "@/lib/logger";
 // =====================================================
 // FUNÇÃO: Desconectar WhatsApp ao expirar
@@ -152,3 +151,9 @@ export const reconnectWhatsApp = inngest.createFunction(
       return { success: true, tenantId, wasDeleted };
     }
   );
+
+  export const functions = [
+    disconnectWhatsApp,
+    deleteWhatsAppInstance,
+    reconnectWhatsApp,
+  ]
